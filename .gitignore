@@ -1,0 +1,26 @@
+# Ignore all exe files
+*.exe
+
+# Ignore all log files
+*.log
+
+*.ilk
+*.pdb
+
+# Ignore all object files
+*.obj
+
+# Ignore all sln files
+*.sln
+
+# Ignore entire build dir
+build/
+
+# Ignore entire iaca-win64 dir
+#iaca-win64/
+
+# Ignore entire ctime dir
+#game/ctime/
+
+# Ignore entire data dir
+#game/data/
