@@ -2,39 +2,53 @@
 #include <windows.h>
 #include <stdint.h>
 
-#if 0
-void* buffer_memory;
-int buffer_width;
-int buffer_height;
-BITMAPINFO bitmap_info;
+#define GLOBAL        static // Explicit for global variables
+#define LOCAL_PERSIST static // Explicit for locally persisting variables
+#define INTERNAL      static // Explicit for functions internal to the translation unit
 
-void ResizeDIBSection(int width, int height) {
-    if (buffer_memory) VirtualFree(buffer_memory, 0, MEM_RELEASE);
+GLOBAL bool        running;
+GLOBAL BITMAPINFO  bitmap_info;
+GLOBAL void       *bitmap_memory;
+GLOBAL HBITMAP     bitmap_handle;
+GLOBAL HDC         bitmap_device_context;
 
-    buffer_width = width;
-    buffer_height = height;
+INTERNAL void Win32ResizeDIBSection(int width, int height) {
+    if (bitmap_handle) { 
+        DeleteObject(bitmap_handle);
+    }
 
-    bitmap_info.bmiHeader.biSize = sizeof(bitmap_info.bmiHeader);
-    bitmap_info.bmiHeader.biWidth = width;
-    bitmap_info.bmiHeader.biHeight = -height;
-    bitmap_info.bmiHeader.biPlanes = 1;
-    bitmap_info.bmiHeader.biBitCount = 32;
+    if (!bitmap_device_context) { 
+        bitmap_device_context = CreateCompatibleDC(0);
+    }
+
+    bitmap_info.bmiHeader.biSize        = sizeof(bitmap_info.bmiHeader);
+    bitmap_info.bmiHeader.biWidth       = width;
+    bitmap_info.bmiHeader.biHeight      = height;
+    bitmap_info.bmiHeader.biPlanes      = 1;
+    bitmap_info.bmiHeader.biBitCount    = 32;
     bitmap_info.bmiHeader.biCompression = BI_RGB;
 
-    int bytes_per_pixel = 4;
-    int bitmap_memory_size = (width * height) * bytes_per_pixel;
-
-    buffer_memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
+    bitmap_handle = CreateDIBSection(bitmap_device_context, &bitmap_info, DIB_RGB_COLORS, &bitmap_memory, 0, 0);
 }
-#endif
 
-LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM w_param, LPARAM l_param) {
+INTERNAL void Win32UpdateWindow(HDC device_context, int x, int y, int width, int height) { 
+    StretchDIBits(device_context, x, y, width, height, x, y, width, height, bitmap_memory, 
+                  &bitmap_info, DIB_RGB_COLORS, SRCCOPY);
+}
+
+LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_param, LPARAM l_param) {
     LRESULT result = 0;
     switch (message) {
-        case WM_SIZE:        OutputDebugStringA("WM_SIZE\n");               break;
-        case WM_DESTROY:     OutputDebugStringA("WM_DESTROY\n");            break;
-        case WM_CLOSE:       OutputDebugStringA("WM_CLOSE\n");              break;
-        case WM_ACTIVATEAPP: OutputDebugStringA("WM_ACTIVATEAPP\n");        break;
+        case WM_SIZE: {
+            RECT client_rect;
+            GetClientRect(window, &client_rect);
+            int width  = client_rect.right  - client_rect.left;
+            int height = client_rect.bottom - client_rect.top;
+            Win32ResizeDIBSection(width, height);
+        } break;
+        case WM_DESTROY:     running = false;                        break; // TODO: Handle this as an error and maybe recreate the window.
+        case WM_CLOSE:       running = false;                        break; // TODO: Handle this with a message to the user.
+        case WM_ACTIVATEAPP: OutputDebugStringA("WM_ACTIVATEAPP\n"); break;
         case WM_PAINT: {  
             PAINTSTRUCT paint;
             HDC device_context = BeginPaint(window, &paint);
@@ -42,13 +56,7 @@ LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM w_param, L
             int y = paint.rcPaint.top;
             int width = paint.rcPaint.right - paint.rcPaint.left;
             int height = paint.rcPaint.bottom - paint.rcPaint.top;
-            static DWORD operation = WHITENESS;
-            PatBlt(device_context, x, y, width, height, operation);
-            if (operation == WHITENESS) {
-                operation = BLACKNESS;
-            } else { 
-                operation = WHITENESS;
-            }
+            Win32UpdateWindow(device_context, x, y, width, height);
             EndPaint(window, &paint);
         } break;
         default: result = DefWindowProc(window, message, w_param, l_param); break;
@@ -58,7 +66,7 @@ LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM w_param, L
 
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line, int show_code) {
     WNDCLASS window_class = {};
-    window_class.lpfnWndProc = MainWindowCallback;
+    window_class.lpfnWndProc = Win32MainWindowCallback;
     window_class.hInstance = instance;
     // window_class.hIcon;
     window_class.lpszClassName = "RasterWindowClass";
