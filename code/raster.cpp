@@ -27,19 +27,13 @@ INTERNAL void RenderGradient(int x_offset, int y_offset) {
     int pitch = g_bitmap_width*g_bytes_per_pixel;
     u8 *row = (u8 *)g_bitmap_memory;
     for (int y = 0; y < g_bitmap_height; y++) { 
-        u8 *pixel = row;
+        u32 *pixel = (u32 *)row;
         for (int x = 0; x < g_bitmap_width; x++) { 
-            *pixel = (u8)x + x_offset;
-            pixel++;
 
-            *pixel = (u8)y + y_offset;
-            pixel++;
+            u8 blue = x + x_offset;
+            u8 green = y + y_offset;
 
-            *pixel = 0;
-            pixel++;
-
-            *pixel = 0;
-            pixel++;
+            *pixel++ = ((green << 8) | blue);
         }
 
         row += pitch;
@@ -63,14 +57,11 @@ INTERNAL void Win32ResizeDIBSection(int width, int height) {
 
     int bitmap_memory_size = g_bitmap_width * g_bitmap_height * g_bytes_per_pixel;
     g_bitmap_memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
-
-    RenderGradient(150, 150);
-
 }
 
-INTERNAL void Win32UpdateWindow(HDC device_context, RECT *window_rect, int x, int y, int width, int height) { 
-    int window_width  = window_rect->right  - window_rect->left;
-    int window_height = window_rect->bottom - window_rect->top;
+INTERNAL void Win32UpdateWindow(HDC device_context, RECT *client_rect, int x, int y, int width, int height) { 
+    int window_width  = client_rect->right  - client_rect->left;
+    int window_height = client_rect->bottom - client_rect->top;
     StretchDIBits(device_context, /*x, y, width, height, x, y, width, height, */ 
                   0, 0, g_bitmap_width, g_bitmap_height, 0, 0, window_width, window_height, g_bitmap_memory, 
                   &g_bitmap_info, DIB_RGB_COLORS, SRCCOPY);
@@ -107,29 +98,44 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_par
     return result;
 }
 
-int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line, int show_code) {
+int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line, int show_command_line) {
     WNDCLASS window_class = {};
     window_class.lpfnWndProc = Win32MainWindowCallback;
     window_class.hInstance = instance;
     // window_class.hIcon;
     window_class.lpszClassName = "RasterWindowClass";
-    g_running = true;
 
     if (RegisterClass(&window_class)) { 
-        HWND window_handle = CreateWindowEx(0, window_class.lpszClassName, "Rasteriser", 
-                                            WS_OVERLAPPEDWINDOW|WS_VISIBLE, CW_USEDEFAULT,
-                                            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 
-                                            0, 0, instance, 0);
-        if (window_handle) {
+        HWND window = CreateWindowEx(0, window_class.lpszClassName, "Rasteriser", 
+                                     WS_OVERLAPPEDWINDOW|WS_VISIBLE, CW_USEDEFAULT,
+                                     CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 
+                                     0, 0, instance, 0);
+        if (window) {
+            int x_offset = 0;
+            int y_offset = 0;
+            g_running = true;
             while(g_running) {
                 MSG message; 
-                BOOL message_result = GetMessage(&message, 0, 0, 0);
-                if (message_result > 0) {
+                while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
+                    if (message.message == WM_QUIT) { 
+                        g_running = false;
+                    } 
+
                     TranslateMessage(&message);
-                    DispatchMessage(&message);
-                } else {
-                    break;
+                    DispatchMessageA(&message);
                 }
+
+                RenderGradient(x_offset, y_offset);
+                HDC device_context = GetDC(window);
+                RECT client_rect;
+                GetClientRect(window, &client_rect);
+                int window_width  = client_rect.right - client_rect.left;
+                int window_height = client_rect.bottom - client_rect.top;
+                Win32UpdateWindow(device_context, &client_rect, 0, 0, window_width, window_height);
+                ReleaseDC(window, device_context);
+
+                x_offset++;
+                y_offset++;
             }
         } else {
             // TODO: Do some logging here for failed window handle.
@@ -137,6 +143,5 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
     } else {
             // TODO: Do some logging here for failed window class.
     }
-    return 0;
 }
 
