@@ -59,11 +59,11 @@ INTERNAL void Win32ResizeDIBSection(int width, int height) {
     g_bitmap_memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
 }
 
-INTERNAL void Win32UpdateWindow(HDC device_context, RECT *client_rect, int x, int y, int width, int height) { 
-    int window_width  = client_rect->right  - client_rect->left;
-    int window_height = client_rect->bottom - client_rect->top;
+INTERNAL void Win32UpdateWindow(HDC device_context, RECT client_rect, int x, int y, int width, int height) { 
+    int window_width  = client_rect.right  - client_rect.left;
+    int window_height = client_rect.bottom - client_rect.top;
     StretchDIBits(device_context, /*x, y, width, height, x, y, width, height, */ 
-                  0, 0, g_bitmap_width, g_bitmap_height, 0, 0, window_width, window_height, g_bitmap_memory, 
+                  0, 0, window_width, window_height, 0, 0, g_bitmap_width, g_bitmap_height, g_bitmap_memory, 
                   &g_bitmap_info, DIB_RGB_COLORS, SRCCOPY);
 }
 
@@ -90,7 +90,7 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_par
 
             RECT client_rect;
             GetClientRect(window, &client_rect);
-            Win32UpdateWindow(device_context, &client_rect, x, y, width, height);
+            Win32UpdateWindow(device_context, client_rect, x, y, width, height);
             EndPaint(window, &paint);
         } break;
         default: result = DefWindowProc(window, message, w_param, l_param); break;
@@ -99,9 +99,10 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_par
 }
 
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line, int show_command_line) {
-    WNDCLASS window_class = {};
+    WNDCLASS window_class    = {};
+    window_class.style       = CS_HREDRAW|CS_VREDRAW;
     window_class.lpfnWndProc = Win32MainWindowCallback;
-    window_class.hInstance = instance;
+    window_class.hInstance   = instance;
     // window_class.hIcon;
     window_class.lpszClassName = "RasterWindowClass";
 
@@ -131,7 +132,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                 GetClientRect(window, &client_rect);
                 int window_width  = client_rect.right - client_rect.left;
                 int window_height = client_rect.bottom - client_rect.top;
-                Win32UpdateWindow(device_context, &client_rect, 0, 0, window_width, window_height);
+                Win32UpdateWindow(device_context, client_rect, 0, 0, window_width, window_height);
                 ReleaseDC(window, device_context);
 
                 x_offset++;

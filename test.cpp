@@ -6,15 +6,42 @@
 #define INTERNAL      static
 
 GLOBAL bool g_running;
+GLOBAL void *g_bitmap_memory;
+GLOBAL BITMAPINFO g_bitmap_info;
+GLOBAL int g_bitmap_width;
+GLOBAL int g_bitmap_height;
+GLOBAL int g_bytes_per_pixel = 4;
 
 INTERNAL void Win32ResizeDIBSection(int width, int height) {
+    if (g_bitmap_memory) {
+        VirtualFree(g_bitmap_memory, 0, MEM_RELEASE); 
+    }
+
+    g_bitmap_width = width;
+    g_bitmap_height = height;
+
+    g_bitmap_info.bmiHeader.biSize = sizeof(g_bitmap_info.bmiHeader); 
+    g_bitmap_info.bmiHeader.biWidth = g_bitmap_width; 
+    g_bitmap_info.bmiHeader.biHeight = -g_bitmap_height; 
+    g_bitmap_info.bmiHeader.biPlanes = 1; 
+    g_bitmap_info.bmiHeader.biBitCount = 32; 
+    g_bitmap_info.bmiHeader.biCompression = BI_RGB;
+
+    int bitmap_memory_size = g_bitmap_width * g_bitmap_height * g_bytes_per_pixel;
+    g_bitmap_memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
+}
+
+INTERNAL void Win32UpdateWindow(HDC device_context, int dest_width, int dest_height) {
+    StretchDIBits(device_context, 0, 0, dest_width, dest_height, 0, 0, g_bitmap_width, g_bitmap_height, g_bitmap_memory, 
+                  &g_bitmap_info, DIB_RGB_COLORS, SRCCOPY);
 }
 
 LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_param, LPARAM l_param) {
     LRESULT result = 0;
     switch (message) {
         case WM_SIZE: {
-            RECT client_rect = GetClientRect(window, &client_rect);
+            RECT client_rect; 
+            GetClientRect(window, &client_rect);
             int rect_width  = client_rect.right  - client_rect.left;
             int rect_height = client_rect.bottom - client_rect.top;
             Win32ResizeDIBSection(rect_width, rect_height);
@@ -29,13 +56,12 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_par
         int y = paint.rcPaint.top;
         int width = paint.rcPaint.right - paint.rcPaint.left;
         int height = paint.rcPaint.bottom - paint.rcPaint.top;
-        LOCAL_PERSIST DWORD operation = WHITENESS;
-        PatBlt(device_context, x, y, width, height, operation);  
-        if (operation == WHITENESS ) 
-            operation = BLACKNESS;
-        else  
-            operation = WHITENESS;
 
+        RECT client_rect; 
+        GetClientRect(window, &client_rect);
+        int dest_width = client_rect.right - client_rect.left;
+        int dest_height = client_rect.bottom - client_rect.top;
+        Win32UpdateWindow(device_context, dest_width, dest_height);
         EndPaint(window, &paint);
         } break;
 
@@ -47,6 +73,7 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_par
 
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line, int show_command_line) {
     WNDCLASS window_class    = {};
+    window_class.style       = CS_HREDRAW|CS_VREDRAW;
     window_class.lpfnWndProc = Win32MainWindowCallback;
     window_class.hInstance   = instance;
     window_class.lpszClassName = "TestWindowClass";
