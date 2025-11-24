@@ -21,7 +21,6 @@ BITMAPINFO  info;
 void       *memory;
 int         width;
 int         height;
-int         bytes_per_pixel;
 int         pitch;
 };
 
@@ -65,7 +64,7 @@ INTERNAL void Win32ResizeDIBSection(Win32_Bitmap *bitmap, int width, int height)
 
     bitmap->width  = width;
     bitmap->height = height;
-    bitmap->bytes_per_pixel = 4;
+    int bytes_per_pixel = 4;
 
     bitmap->info.bmiHeader.biSize        = sizeof(bitmap->info.bmiHeader);
     bitmap->info.bmiHeader.biWidth       = bitmap->width;
@@ -74,9 +73,9 @@ INTERNAL void Win32ResizeDIBSection(Win32_Bitmap *bitmap, int width, int height)
     bitmap->info.bmiHeader.biBitCount    = 32;
     bitmap->info.bmiHeader.biCompression = BI_RGB;
 
-    int bitmap_memory_size = bitmap->width * bitmap->height * bitmap->bytes_per_pixel;
+    int bitmap_memory_size = bitmap->width * bitmap->height * bytes_per_pixel;
     bitmap->memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
-    bitmap->pitch  = bitmap->width * bitmap->bytes_per_pixel;
+    bitmap->pitch  = bitmap->width * bytes_per_pixel;
 }
 
 INTERNAL void Win32CopyBitmapToWindow(HDC device_context, Win32_Bitmap bitmap, 
@@ -97,7 +96,6 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_par
         case WM_PAINT: {  
             PAINTSTRUCT paint;
             HDC device_context = BeginPaint(window, &paint);
-
             Win32_Window_Dimension dimension = Win32GetWindowDimension(window);
             Win32CopyBitmapToWindow(device_context, g_bitmap, dimension.width, dimension.height);
             EndPaint(window, &paint);
