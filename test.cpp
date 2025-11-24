@@ -1,5 +1,6 @@
 
 #include <windows.h>
+#include <stdint.h>
 
 #define GLOBAL        static
 #define LOCAL_PERSIST static
@@ -11,6 +12,26 @@ GLOBAL BITMAPINFO g_bitmap_info;
 GLOBAL int g_bitmap_width;
 GLOBAL int g_bitmap_height;
 GLOBAL int g_bytes_per_pixel = 4;
+
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
+INTERNAL void RenderGradient(int x_offset, int y_offset) {
+    int pitch = g_bytes_per_pixel * g_bitmap_width;
+    u8 *row = (u8 *)g_bitmap_memory;
+    for (int y = 0; y < g_bitmap_height; y++) {
+        u32 *pixel = (u32 *)row;
+        for (int x = 0; x < g_bitmap_width; x++) { 
+            u8 blue = x + x_offset;
+            u8 green = y + y_offset;
+            *pixel++ = ((green << 8) | blue);
+        }
+
+        row += pitch;
+    }
+}
 
 INTERNAL void Win32ResizeDIBSection(int width, int height) {
     if (g_bitmap_memory) {
@@ -52,11 +73,6 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_par
         case WM_PAINT: {
         PAINTSTRUCT paint;
         HDC device_context = BeginPaint(window, &paint);
-        int x = paint.rcPaint.left;
-        int y = paint.rcPaint.top;
-        int width = paint.rcPaint.right - paint.rcPaint.left;
-        int height = paint.rcPaint.bottom - paint.rcPaint.top;
-
         RECT client_rect; 
         GetClientRect(window, &client_rect);
         int dest_width = client_rect.right - client_rect.left;
@@ -77,21 +93,33 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
     window_class.lpfnWndProc = Win32MainWindowCallback;
     window_class.hInstance   = instance;
     window_class.lpszClassName = "TestWindowClass";
-    g_running = true;
 
     if (RegisterClassA(&window_class)) {
         HWND window_handle = CreateWindowExA(0, window_class.lpszClassName, "TestWindow", WS_OVERLAPPEDWINDOW|WS_VISIBLE,
                                             CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, instance, 0);
         if (window_handle) {
+            int x_offset = 0;
+            int y_offset = 0;
+            g_running = true;
             while (g_running) {
                 MSG message;
-                BOOL message_result = GetMessage(&message, 0, 0, 0);
-                if (message_result > 0) {
+                while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
+                    if (message.message == WM_QUIT) {
+                        g_running = false;
+                    }
                     TranslateMessage(&message);
                     DispatchMessage(&message);
-                } else {
-                    break;
                 }
+
+                RenderGradient(x_offset, y_offset);
+                HDC device_context = GetDC(window_handle);
+                RECT client_rect; 
+                GetClientRect(window_handle, &client_rect);
+                int window_width = client_rect.right - client_rect.left;
+                int window_height = client_rect.bottom - client_rect.top;
+                Win32UpdateWindow(device_context, window_width, window_height);
+                x_offset++;
+                y_offset++;
             }
         } else {
             // TODO: failed window handle logging
