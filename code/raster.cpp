@@ -106,6 +106,10 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_par
 }
 
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line, int show_command_line) {
+    LARGE_INTEGER tick_frequency_result;
+    QueryPerformanceFrequency(&tick_frequency_result);
+    s64 tick_frequency = tick_frequency_result.QuadPart;
+
     WNDCLASS window_class    = {};
     Win32ResizeDIBSection(&g_bitmap, 1280, 720);
     window_class.style       = CS_HREDRAW|CS_VREDRAW|CS_OWNDC;
@@ -124,6 +128,9 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
             int x_offset = 0;
             int y_offset = 0;
             g_running = true;
+            LARGE_INTEGER begin_frame_count;
+            QueryPerformanceCounter(&begin_frame_count);
+            s64 begin_cycle_count = __rdtsc();
             while(g_running) {
                 MSG message; 
                 while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
@@ -141,6 +148,24 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
 
                 x_offset++;
                 y_offset++;
+
+                s64 end_cycle_count = __rdtsc();
+
+                LARGE_INTEGER end_frame_count;
+                QueryPerformanceCounter(&end_frame_count);
+                s64 ticks_this_frame = end_frame_count.QuadPart - begin_frame_count.QuadPart;
+                s32 fps = (tick_frequency / ticks_this_frame); 
+                s32 ms_per_frame = (s32)((ticks_this_frame*1000) / tick_frequency);
+                s64 cycles_this_frame = end_cycle_count - begin_cycle_count;
+                s32 mega_cycles_per_frame = (s32)(cycles_this_frame / (1000*1000));
+
+
+                char buffer[256];
+                wsprintf(buffer, "%dms,    %dfps,    %dcycles\n", ms_per_frame, fps, mega_cycles_per_frame);
+                OutputDebugStringA(buffer);
+
+                begin_frame_count = end_frame_count;
+                begin_cycle_count = end_cycle_count;
             }
         } else {
             // TODO: Do some logging here for failed window handle.
