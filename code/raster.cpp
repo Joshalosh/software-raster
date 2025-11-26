@@ -27,6 +27,7 @@ void       *memory;
 int         width;
 int         height;
 int         pitch;
+int         bytes_per_pixel;
 };
 
 
@@ -71,7 +72,7 @@ INTERNAL void Win32ResizeDIBSection(Win32_Bitmap *bitmap, int width, int height)
 
     bitmap->width  = width;
     bitmap->height = height;
-    int bytes_per_pixel = 4;
+    bitmap->bytes_per_pixel = 4;
 
     bitmap->info.bmiHeader.biSize        = sizeof(bitmap->info.bmiHeader);
     bitmap->info.bmiHeader.biWidth       = bitmap->width;
@@ -80,9 +81,9 @@ INTERNAL void Win32ResizeDIBSection(Win32_Bitmap *bitmap, int width, int height)
     bitmap->info.bmiHeader.biBitCount    = 32;
     bitmap->info.bmiHeader.biCompression = BI_RGB;
 
-    int bitmap_memory_size = bitmap->width * bitmap->height * bytes_per_pixel;
+    int bitmap_memory_size = bitmap->width * bitmap->height * bitmap->bytes_per_pixel;
     bitmap->memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
-    bitmap->pitch  = bitmap->width * bytes_per_pixel;
+    bitmap->pitch  = bitmap->width * bitmap->bytes_per_pixel;
 }
 
 INTERNAL void Win32CopyBitmapToWindow(HDC device_context, Win32_Bitmap bitmap, 
@@ -123,13 +124,39 @@ INTERNAL r32 Win32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return result;
 }
 
+INTERNAL s32 RoundedR32ToS32(r32 a) {
+    s32 result = (s32)(a + 0.5f);
+    return result;
+}
+
+INTERNAL void DrawRectangle(Win32_Bitmap bitmap, r32 min_real_x, r32 min_real_y, r32 max_real_x, r32 max_real_y, u32 color) {
+    s32 min_x = RoundedR32ToS32(min_real_x);
+    s32 min_y = RoundedR32ToS32(min_real_y);
+    s32 max_x = RoundedR32ToS32(max_real_x);
+    s32 max_y = RoundedR32ToS32(max_real_y);
+
+    if (min_x < 0)            min_x = 0;
+    if (min_y < 0)            min_y = 0;
+    if (max_x > bitmap.width) max_x = bitmap.width;
+    if (max_y > bitmap.height) max_y = bitmap.height;
+
+    u8 *row = (u8 *)bitmap.memory + min_x*bitmap.bytes_per_pixel + min_y*bitmap.pitch;
+    for (int y = min_y; y < max_y; y++) {
+        u32 *pixel = (u32 *)row;
+        for (int x = min_x; x < max_x; x++) { 
+            *pixel++ = color;
+        }
+        row += bitmap.pitch;
+    }
+}
+
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line, int show_command_line) {
     LARGE_INTEGER tick_frequency_result;
     QueryPerformanceFrequency(&tick_frequency_result);
     g_tick_frequency = tick_frequency_result.QuadPart;
 
     WNDCLASS window_class    = {};
-    Win32ResizeDIBSection(&g_bitmap, 1280, 720);
+    Win32ResizeDIBSection(&g_bitmap, 960, 540);
     window_class.style       = CS_HREDRAW|CS_VREDRAW|CS_OWNDC;
     window_class.lpfnWndProc = Win32MainWindowCallback;
     window_class.hInstance   = instance;
@@ -164,7 +191,11 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                     TranslateMessage(&message);
                     DispatchMessageA(&message);
                 }
-                RenderGradient(g_bitmap, x_offset, y_offset);
+                //RenderGradient(g_bitmap, x_offset, y_offset);
+                u32 purple = 0x00FF00FF;
+                u32 white  = 0xFFFFFFFF;
+                DrawRectangle(g_bitmap, 0, 0, g_bitmap.width, g_bitmap.height, purple);
+                DrawRectangle(g_bitmap, 10, 10, 50, 50, white);
                 Win32_Window_Dimension dimension = Win32GetWindowDimension(window);
                 Win32CopyBitmapToWindow(device_context, g_bitmap, dimension.width, dimension.height);
 
