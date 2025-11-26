@@ -1,6 +1,6 @@
 
-#include <windows.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #define GLOBAL        static // Explicit for global variables
 #define LOCAL_PERSIST static // Explicit for locally persisting variables
@@ -16,6 +16,11 @@ typedef int16_t s16;
 typedef int32_t s32;
 typedef int64_t s64;
 
+typedef float  r32;
+typedef double r64;
+
+#include <windows.h>
+
 struct Win32_Bitmap {
 BITMAPINFO  info;
 void       *memory;
@@ -24,8 +29,10 @@ int         height;
 int         pitch;
 };
 
+
 GLOBAL bool         g_running;
 GLOBAL Win32_Bitmap g_bitmap;
+GLOBAL s64          g_tick_frequency;
 
 struct Win32_Window_Dimension {
     int width;
@@ -105,10 +112,21 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_par
     return result;
 }
 
+INTERNAL LARGE_INTEGER Win32GetTickCount() {
+    LARGE_INTEGER result; 
+    QueryPerformanceCounter(&result);
+    return result;
+}
+
+INTERNAL r32 Win32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
+    r32 result = (r32)(end.QuadPart - start.QuadPart) / (r32)g_tick_frequency;
+    return result;
+}
+
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line, int show_command_line) {
     LARGE_INTEGER tick_frequency_result;
     QueryPerformanceFrequency(&tick_frequency_result);
-    s64 tick_frequency = tick_frequency_result.QuadPart;
+    g_tick_frequency = tick_frequency_result.QuadPart;
 
     WNDCLASS window_class    = {};
     Win32ResizeDIBSection(&g_bitmap, 1280, 720);
@@ -117,6 +135,12 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
     window_class.hInstance   = instance;
     // window_class.hIcon;
     window_class.lpszClassName = "RasterWindowClass";
+
+    r32 target_seconds_per_frame = 1.0f / 60.0f;
+    // Have to set the millisecond cound of the schedular granularity.
+    int desired_schedular_ms = 1;
+    timeBeginPeriod(desired_schedular_ms);
+
 
     if (RegisterClass(&window_class)) { 
         HWND window = CreateWindowEx(0, window_class.lpszClassName, "Rasteriser", 
@@ -128,9 +152,8 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
             int x_offset = 0;
             int y_offset = 0;
             g_running = true;
-            LARGE_INTEGER begin_frame_count;
-            QueryPerformanceCounter(&begin_frame_count);
-            s64 begin_cycle_count = __rdtsc();
+            LARGE_INTEGER begin_frame_count = Win32GetTickCount();
+            u64 begin_cycle_count = __rdtsc();
             while(g_running) {
                 MSG message; 
                 while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
@@ -144,27 +167,39 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                 RenderGradient(g_bitmap, x_offset, y_offset);
                 Win32_Window_Dimension dimension = Win32GetWindowDimension(window);
                 Win32CopyBitmapToWindow(device_context, g_bitmap, dimension.width, dimension.height);
-                ReleaseDC(window, device_context);
 
                 x_offset++;
                 y_offset++;
 
-                s64 end_cycle_count = __rdtsc();
 
-                LARGE_INTEGER end_frame_count;
-                QueryPerformanceCounter(&end_frame_count);
-                s64 ticks_this_frame = end_frame_count.QuadPart - begin_frame_count.QuadPart;
-                s32 fps = (tick_frequency / ticks_this_frame); 
-                s32 ms_per_frame = (s32)((ticks_this_frame*1000) / tick_frequency);
-                s64 cycles_this_frame = end_cycle_count - begin_cycle_count;
-                s32 mega_cycles_per_frame = (s32)(cycles_this_frame / (1000*1000));
+                LARGE_INTEGER work_count = Win32GetTickCount();
+                r32 work_seconds = Win32GetSecondsElapsed(begin_frame_count, work_count);
 
+                r32 frame_seconds_elapsed = work_seconds;
+                if (frame_seconds_elapsed < target_seconds_per_frame) {
+                    s32 ms_to_sleep = (s32)(1000.0f * (target_seconds_per_frame - frame_seconds_elapsed) - 1.0f);
+                    if (ms_to_sleep > 0) {
+                        Sleep((DWORD)ms_to_sleep);
+                    }
+                    while (frame_seconds_elapsed < target_seconds_per_frame) {
+                        frame_seconds_elapsed = Win32GetSecondsElapsed(begin_frame_count, Win32GetTickCount());
+                    }
+                } else {
+                    // Missed the frame and need to log or sumfin
+                }
+
+                u64 end_cycle_count = __rdtsc();
+                LARGE_INTEGER current_ticks = Win32GetTickCount();
+                r32 fps = (r32)g_tick_frequency / (current_ticks.QuadPart - begin_frame_count.QuadPart); 
+                r64 cycles_this_frame = end_cycle_count - begin_cycle_count;
+                r32 mega_cycles_per_frame = cycles_this_frame / (1000.0f*1000.0f);
+                r32 ms_per_frame = 1000.0f*frame_seconds_elapsed;
 
                 char buffer[256];
-                wsprintf(buffer, "%dms,    %dfps,    %dcycles\n", ms_per_frame, fps, mega_cycles_per_frame);
+                sprintf(buffer, "%.02fms,    %.02ffps,    %.02fcycles\n", ms_per_frame, fps, mega_cycles_per_frame);
                 OutputDebugStringA(buffer);
 
-                begin_frame_count = end_frame_count;
+                begin_frame_count = current_ticks;
                 begin_cycle_count = end_cycle_count;
             }
         } else {
