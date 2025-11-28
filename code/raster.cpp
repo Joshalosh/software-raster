@@ -6,20 +6,21 @@
 #define LOCAL_PERSIST static // Explicit for locally persisting variables
 #define INTERNAL      static // Explicit for functions internal to the translation unit
 
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
+typedef uint8_t  U8;
+typedef uint16_t U16;
+typedef uint32_t U32;
+typedef uint64_t U64;
 
-typedef int8_t  s8;
-typedef int16_t s16;
-typedef int32_t s32;
-typedef int64_t s64;
+typedef int8_t   S8;
+typedef int16_t  S16;
+typedef int32_t  S32;
+typedef int64_t  S64;
 
-typedef float  r32;
-typedef double r64;
+typedef float    R32;
+typedef double   R64;
 
 #include <windows.h>
+#include "mymath.h"
 
 struct Win32_Bitmap {
 BITMAPINFO  info;
@@ -33,7 +34,7 @@ int         bytes_per_pixel;
 
 GLOBAL bool         g_running;
 GLOBAL Win32_Bitmap g_bitmap;
-GLOBAL s64          g_tick_frequency;
+GLOBAL S64          g_tick_frequency;
 
 struct Win32_Window_Dimension {
     int width;
@@ -50,13 +51,13 @@ Win32_Window_Dimension Win32GetWindowDimension(HWND window) {
 }
 
 INTERNAL void RenderGradient(Win32_Bitmap bitmap, int x_offset, int y_offset) {
-    u8 *row = (u8 *)bitmap.memory;
+    U8 *row = (U8 *)bitmap.memory;
     for (int y = 0; y < bitmap.height; y++) { 
-        u32 *pixel = (u32 *)row;
+        U32 *pixel = (U32 *)row;
         for (int x = 0; x < bitmap.width; x++) { 
 
-            u8 blue = x + x_offset;
-            u8 green = y + y_offset;
+            U8 blue = x + x_offset;
+            U8 green = y + y_offset;
 
             *pixel++ = ((green << 8) | blue);
         }
@@ -119,34 +120,34 @@ INTERNAL LARGE_INTEGER Win32GetTickCount() {
     return result;
 }
 
-INTERNAL r32 Win32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
-    r32 result = (r32)(end.QuadPart - start.QuadPart) / (r32)g_tick_frequency;
+INTERNAL R32 Win32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
+    R32 result = (R32)(end.QuadPart - start.QuadPart) / (R32)g_tick_frequency;
     return result;
 }
 
-INTERNAL s32 RoundedR32ToS32(r32 a) {
-    s32 result = (s32)(a + 0.5f);
+INTERNAL S32 RoundedR32ToS32(R32 a) {
+    S32 result = (S32)(a + 0.5f);
     return result;
 }
 
-INTERNAL void DrawRectangle(Win32_Bitmap bitmap, r32 min_real_x, r32 min_real_y, r32 max_real_x, r32 max_real_y, u32 color) {
-    s32 min_x = RoundedR32ToS32(min_real_x);
-    s32 min_y = RoundedR32ToS32(min_real_y);
-    s32 max_x = RoundedR32ToS32(max_real_x);
-    s32 max_y = RoundedR32ToS32(max_real_y);
+INTERNAL void DrawRectangle(Win32_Bitmap *bitmap, R32 min_real_x, R32 min_real_y, R32 max_real_x, R32 max_real_y, U32 color) {
+    S32 min_x = RoundedR32ToS32(min_real_x);
+    S32 min_y = RoundedR32ToS32(min_real_y);
+    S32 max_x = RoundedR32ToS32(max_real_x);
+    S32 max_y = RoundedR32ToS32(max_real_y);
 
-    if (min_x < 0)            min_x = 0;
-    if (min_y < 0)            min_y = 0;
-    if (max_x > bitmap.width) max_x = bitmap.width;
-    if (max_y > bitmap.height) max_y = bitmap.height;
+    if (min_x < 0)             min_x = 0;
+    if (min_y < 0)             min_y = 0;
+    if (max_x > bitmap->width)  max_x = bitmap->width;
+    if (max_y > bitmap->height) max_y = bitmap->height;
 
-    u8 *row = (u8 *)bitmap.memory + min_x*bitmap.bytes_per_pixel + min_y*bitmap.pitch;
+    U8 *row = (U8 *)bitmap->memory + min_x*bitmap->bytes_per_pixel + min_y*bitmap->pitch;
     for (int y = min_y; y < max_y; y++) {
-        u32 *pixel = (u32 *)row;
+        U32 *pixel = (U32 *)row;
         for (int x = min_x; x < max_x; x++) { 
             *pixel++ = color;
         }
-        row += bitmap.pitch;
+        row += bitmap->pitch;
     }
 }
 
@@ -163,7 +164,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
     // window_class.hIcon;
     window_class.lpszClassName = "RasterWindowClass";
 
-    r32 target_seconds_per_frame = 1.0f / 60.0f;
+    R32 target_seconds_per_frame = 1.0f / 60.0f;
     // Have to set the millisecond cound of the schedular granularity.
     int desired_schedular_ms = 1;
     timeBeginPeriod(desired_schedular_ms);
@@ -180,7 +181,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
             int y_offset = 0;
             g_running = true;
             LARGE_INTEGER begin_frame_count = Win32GetTickCount();
-            u64 begin_cycle_count = __rdtsc();
+            U64 begin_cycle_count = __rdtsc();
             while(g_running) {
                 MSG message; 
                 while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
@@ -192,10 +193,10 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                     DispatchMessageA(&message);
                 }
                 //RenderGradient(g_bitmap, x_offset, y_offset);
-                u32 purple = 0x00FF00FF;
-                u32 white  = 0xFFFFFFFF;
-                DrawRectangle(g_bitmap, 0, 0, g_bitmap.width, g_bitmap.height, purple);
-                DrawRectangle(g_bitmap, 10, 10, 50, 50, white);
+                U32 purple = 0x00FF00FF;
+                U32 white  = 0xFFFFFFFF;
+                DrawRectangle(&g_bitmap, 0, 0, g_bitmap.width, g_bitmap.height, purple);
+                DrawRectangle(&g_bitmap, 10.0f, 10.0f, 50.0f, 50.0f, white);
                 Win32_Window_Dimension dimension = Win32GetWindowDimension(window);
                 Win32CopyBitmapToWindow(device_context, g_bitmap, dimension.width, dimension.height);
 
@@ -204,11 +205,11 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
 
 
                 LARGE_INTEGER work_count = Win32GetTickCount();
-                r32 work_seconds = Win32GetSecondsElapsed(begin_frame_count, work_count);
+                R32 work_seconds = Win32GetSecondsElapsed(begin_frame_count, work_count);
 
-                r32 frame_seconds_elapsed = work_seconds;
+                R32 frame_seconds_elapsed = work_seconds;
                 if (frame_seconds_elapsed < target_seconds_per_frame) {
-                    s32 ms_to_sleep = (s32)(1000.0f * (target_seconds_per_frame - frame_seconds_elapsed) - 1.0f);
+                    S32 ms_to_sleep = (S32)(1000.0f * (target_seconds_per_frame - frame_seconds_elapsed) - 1.0f);
                     if (ms_to_sleep > 0) {
                         Sleep((DWORD)ms_to_sleep);
                     }
@@ -219,12 +220,12 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                     // Missed the frame and need to log or sumfin
                 }
 
-                u64 end_cycle_count = __rdtsc();
+                U64 end_cycle_count = __rdtsc();
                 LARGE_INTEGER current_ticks = Win32GetTickCount();
-                r32 fps = (r32)g_tick_frequency / (current_ticks.QuadPart - begin_frame_count.QuadPart); 
-                r64 cycles_this_frame = end_cycle_count - begin_cycle_count;
-                r32 mega_cycles_per_frame = cycles_this_frame / (1000.0f*1000.0f);
-                r32 ms_per_frame = 1000.0f*frame_seconds_elapsed;
+                R32 fps = (R32)g_tick_frequency / (current_ticks.QuadPart - begin_frame_count.QuadPart); 
+                R64 cycles_this_frame = end_cycle_count - begin_cycle_count;
+                R32 mega_cycles_per_frame = cycles_this_frame / (1000.0f*1000.0f);
+                R32 ms_per_frame = 1000.0f*frame_seconds_elapsed;
 
                 char buffer[256];
                 sprintf(buffer, "%.02fms,    %.02ffps,    %.02fcycles\n", ms_per_frame, fps, mega_cycles_per_frame);
