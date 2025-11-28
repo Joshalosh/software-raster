@@ -130,11 +130,11 @@ INTERNAL S32 RoundedR32ToS32(R32 a) {
     return result;
 }
 
-INTERNAL void DrawRectangle(Win32_Bitmap *bitmap, R32 min_real_x, R32 min_real_y, R32 max_real_x, R32 max_real_y, U32 color) {
-    S32 min_x = RoundedR32ToS32(min_real_x);
-    S32 min_y = RoundedR32ToS32(min_real_y);
-    S32 max_x = RoundedR32ToS32(max_real_x);
-    S32 max_y = RoundedR32ToS32(max_real_y);
+INTERNAL void DrawRectangle(Win32_Bitmap *bitmap, V2 min, V2 max, U32 color) {
+    S32 min_x = RoundedR32ToS32(min.x);
+    S32 min_y = RoundedR32ToS32(min.y);
+    S32 max_x = RoundedR32ToS32(max.x);
+    S32 max_y = RoundedR32ToS32(max.y);
 
     if (min_x < 0)             min_x = 0;
     if (min_y < 0)             min_y = 0;
@@ -195,14 +195,13 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                 //RenderGradient(g_bitmap, x_offset, y_offset);
                 U32 purple = 0x00FF00FF;
                 U32 white  = 0xFFFFFFFF;
-                DrawRectangle(&g_bitmap, 0, 0, g_bitmap.width, g_bitmap.height, purple);
-                DrawRectangle(&g_bitmap, 10.0f, 10.0f, 50.0f, 50.0f, white);
+                DrawRectangle(&g_bitmap, Vec2(0, 0), Vec2(g_bitmap.width, g_bitmap.height), purple);
+                DrawRectangle(&g_bitmap, Vec2(10.0f, 10.0f), Vec2(50.0f, 50.0f), white);
                 Win32_Window_Dimension dimension = Win32GetWindowDimension(window);
                 Win32CopyBitmapToWindow(device_context, g_bitmap, dimension.width, dimension.height);
 
                 x_offset++;
                 y_offset++;
-
 
                 LARGE_INTEGER work_count = Win32GetTickCount();
                 R32 work_seconds = Win32GetSecondsElapsed(begin_frame_count, work_count);

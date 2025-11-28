@@ -6,7 +6,7 @@ union V2 {
     R32 e[2];
 };
 
-INTERNAL V2 Vex2(R32 x, R32 y) {
+INTERNAL V2 Vec2(R32 x, R32 y) {
     V2 result;
     result.x = x;
     result.y = y;
@@ -52,7 +52,7 @@ INTERNAL V2 &operator+=(V2 a, V2 b) {
 
 INTERNAL V2 operator-(V2 a, V2 b) {
     V2 result;
-    result.x = a.x - b.y;
+    result.x = a.x - b.x;
     result.y = a.y - b.y;
     return result;
 }
