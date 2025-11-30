@@ -195,8 +195,8 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                 //RenderGradient(g_bitmap, x_offset, y_offset);
                 U32 purple = 0x00FF00FF;
                 U32 white  = 0xFFFFFFFF;
-                DrawRectangle(&g_bitmap, Vec2(0, 0), Vec2(g_bitmap.width, g_bitmap.height), purple);
-                DrawRectangle(&g_bitmap, Vec2(10.0f, 10.0f), Vec2(50.0f, 50.0f), white);
+                DrawRectangle(&g_bitmap, V2{0.0f, 0.0f}, V2{(R32)g_bitmap.width, (R32)g_bitmap.height}, purple);
+                DrawRectangle(&g_bitmap, V2{10.0f, 10.0f}, V2{50.0f, 50.0f}, white);
                 Win32_Window_Dimension dimension = Win32GetWindowDimension(window);
                 Win32CopyBitmapToWindow(device_context, g_bitmap, dimension.width, dimension.height);
 
