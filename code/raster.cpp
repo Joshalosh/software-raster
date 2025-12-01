@@ -6,6 +6,9 @@
 #define LOCAL_PERSIST static // Explicit for locally persisting variables
 #define INTERNAL      static // Explicit for functions internal to the translation unit
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 typedef uint8_t  U8;
 typedef uint16_t U16;
 typedef uint32_t U32;
@@ -16,6 +19,7 @@ typedef int16_t  S16;
 typedef int32_t  S32;
 typedef int64_t  S64;
 
+typedef int32_t  B32;
 typedef float    R32;
 typedef double   R64;
 
@@ -125,16 +129,16 @@ INTERNAL R32 Win32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return result;
 }
 
-INTERNAL S32 RoundedR32ToS32(R32 a) {
+INTERNAL S32 RoundR32ToS32(R32 a) {
     S32 result = (S32)(a + 0.5f);
     return result;
 }
 
 INTERNAL void DrawRectangle(Win32_Bitmap *bitmap, V2 min, V2 max, U32 color) {
-    S32 min_x = RoundedR32ToS32(min.x);
-    S32 min_y = RoundedR32ToS32(min.y);
-    S32 max_x = RoundedR32ToS32(max.x);
-    S32 max_y = RoundedR32ToS32(max.y);
+    S32 min_x = RoundR32ToS32(min.x);
+    S32 min_y = RoundR32ToS32(min.y);
+    S32 max_x = RoundR32ToS32(max.x);
+    S32 max_y = RoundR32ToS32(max.y);
 
     if (min_x < 0)             min_x = 0;
     if (min_y < 0)             min_y = 0;
@@ -151,13 +155,64 @@ INTERNAL void DrawRectangle(Win32_Bitmap *bitmap, V2 min, V2 max, U32 color) {
     }
 }
 
+INTERNAL S32 LeftOfEdge(V2 origin_vertex, V2 next_vertex, V2 pixel_coord) {
+    S32 result;
+    V2 edge_line = next_vertex - origin_vertex;
+    V2 local_pixel = pixel_coord - origin_vertex;
+    result = (edge_line.x*local_pixel.y) - (edge_line.y*local_pixel.x);
+    return result;
+}
+
+INTERNAL B32 IsLeftOrTopEdge(V2 origin_vertex, V2 next_vertex) {
+    B32 result;
+    V2 edge = next_vertex - origin_vertex;
+    B32 is_left_edge = edge.y > 0;
+    B32 is_top_edge  = (edge.y == 0) && (edge.x < 0);
+    result = is_left_edge || is_top_edge;
+    return result;
+}
+
+INTERNAL void DrawTriangle(Win32_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, U32 col) {
+    S32 min_x = RoundR32ToS32(MIN(MIN(vert0.x, vert1.x), vert2.x));
+    S32 min_y = RoundR32ToS32(MIN(MIN(vert0.y, vert1.y), vert2.y));
+    S32 max_x = RoundR32ToS32(MAX(MAX(vert0.x, vert1.x), vert2.x));
+    S32 max_y = RoundR32ToS32(MAX(MAX(vert0.y, vert1.y), vert2.y));
+
+    if (min_x < 0)              min_x = 0;
+    if (min_y < 0)              min_y = 0;
+    if (max_x > bitmap->width)  max_x = bitmap->width;
+    if (max_y > bitmap->height) max_y = bitmap->height;
+
+    S32 bias0 = IsLeftOrTopEdge(vert0, vert1) ? 0 : 1;
+    S32 bias1 = IsLeftOrTopEdge(vert1, vert2) ? 0 : 1;
+    S32 bias2 = IsLeftOrTopEdge(vert2, vert0) ? 0 : 1;
+
+    U8 *row = (U8 *)bitmap->memory + min_x*bitmap->bytes_per_pixel + min_y*bitmap->pitch;
+    for (int y = min_y; y < max_y; y++) {
+        U32 *pixel = (U32 *)row;
+        for (int x = min_x; x < max_x; x++) {
+            V2 pixel_coord = {(R32)x, (R32)y};
+            S32 weight0 = LeftOfEdge(vert0, vert1, pixel_coord) + bias0;
+            S32 weight1 = LeftOfEdge(vert1, vert2, pixel_coord) + bias1;
+            S32 weight2 = LeftOfEdge(vert2, vert0, pixel_coord) + bias2;
+
+
+            if (weight0 <= 0 && weight1 <= 0 && weight2 <= 0) {
+                *pixel = col;
+            }
+            pixel++;
+        }
+        row += bitmap->pitch;
+    }
+}
+
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line, int show_command_line) {
     LARGE_INTEGER tick_frequency_result;
     QueryPerformanceFrequency(&tick_frequency_result);
     g_tick_frequency = tick_frequency_result.QuadPart;
 
     WNDCLASS window_class    = {};
-    Win32ResizeDIBSection(&g_bitmap, 960, 540);
+    Win32ResizeDIBSection(&g_bitmap, 1280, 720);
     window_class.style       = CS_HREDRAW|CS_VREDRAW|CS_OWNDC;
     window_class.lpfnWndProc = Win32MainWindowCallback;
     window_class.hInstance   = instance;
@@ -196,7 +251,9 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                 U32 purple = 0x00FF00FF;
                 U32 white  = 0xFFFFFFFF;
                 DrawRectangle(&g_bitmap, V2{0.0f, 0.0f}, V2{(R32)g_bitmap.width, (R32)g_bitmap.height}, purple);
-                DrawRectangle(&g_bitmap, V2{10.0f, 10.0f}, V2{50.0f, 50.0f}, white);
+                //DrawRectangle(&g_bitmap, V2{20.0f, 20.0f}, V2{21.0f, 21.0f}, 0x0000FF00);
+                DrawTriangle(&g_bitmap, V2{100, 600}, V2{300, 600}, V2{200, 200}, white);
+                DrawTriangle(&g_bitmap, V2{300, 600}, V2{500, 450}, V2{200, 200}, 0x0000FF00);
                 Win32_Window_Dimension dimension = Win32GetWindowDimension(window);
                 Win32CopyBitmapToWindow(device_context, g_bitmap, dimension.width, dimension.height);
 

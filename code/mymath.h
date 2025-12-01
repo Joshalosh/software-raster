@@ -1,8 +1,7 @@
 
 union V2 {
-    struct {
-        R32 x, y;
-    };
+    struct {R32 x, y;};
+    struct {R32 u, v;};
     R32 e[2];
 };
 
@@ -20,14 +19,15 @@ INTERNAL V2 operator*(R32 a, V2 b) {
     return result;
 }
 
-INTERNAL V2 operator*(V2 b, R32 a) {
-    V2 result = a*b;
+INTERNAL V2 operator*(V2 a, R32 b) {
+    V2 result = b*a;
     return result;
 }
 
-INTERNAL V2 &operator*=(V2 &b, R32 a) {
-    b = a * b;
-    return b;
+INTERNAL V2 &operator*=(V2 &a, R32 b) {
+    a.x *= b;
+    a.y *= b;
+    return a;
 }
 
 
@@ -45,8 +45,9 @@ INTERNAL V2 operator+(V2 a, V2 b) {
     return result;
 }
 
-INTERNAL V2 &operator+=(V2 a, V2 b) {
-    a = a + b;
+INTERNAL V2 &operator+=(V2 &a, V2 b) {
+    a.x += b.x;
+    a.y += b.y;
     return a;
 }
 
