@@ -5,6 +5,38 @@ union V2 {
     R32 e[2];
 };
 
+union V3 {
+    struct {R32 x, y, z;};
+    struct {R32 u, v, w;};
+    struct {R32 r, g, b;};
+    struct {V2 xy; R32 ignored0_;};
+    struct {R32 ignored1_; V2 yz;};
+    struct {V2 uv; R32 ignored2_;};
+    struct {R32 ignored3_; V2 vw;};
+    R32 e[3];
+};
+
+union V4 {
+    struct {
+        union {
+            V3 xyz;
+            struct {R32 x, y, z;};
+        };
+        R32 w;
+    };
+    struct {
+        union {
+            V3 rgb;
+            struct {R32 r, g, b;};
+        };
+        R32 a;
+    };
+    struct {V2 xy; R32 ignored0_; R32 ignored1_;};
+    struct {R32 ignored2_; V2 yz; R32 ignored3_;};
+    struct {R32 ignored4_; R32 ignored5_; V2 zw;};
+    R32 e[4];
+};
+
 INTERNAL V2 Vec2(R32 x, R32 y) {
     V2 result;
     result.x = x;
