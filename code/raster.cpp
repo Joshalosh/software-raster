@@ -183,21 +183,40 @@ INTERNAL void DrawTriangle(Win32_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, V
     if (max_x > bitmap->width)  max_x = bitmap->width;
     if (max_y > bitmap->height) max_y = bitmap->height;
 
+    V2 edge0 = (vert2 - vert1);
+    V2 edge1 = (vert0 - vert2);
+    V2 edge2 = (vert1 - vert0);
+
+    V2 norm0 = V2{-edge0.y, edge0.x};
+    V2 norm1 = V2{-edge1.y, edge1.x};
+    V2 norm2 = V2{-edge2.y, edge2.x};
+
+    S32 w0_dx = (S32)norm0.x;
+    S32 w1_dx = (S32)norm1.x;
+    S32 w2_dx = (S32)norm2.x;
+
+    S32 w0_dy = (S32)norm0.y;
+    S32 w1_dy = (S32)norm1.y;
+    S32 w2_dy = (S32)norm2.y;
+
     S32 bias0 = IsLeftOrTopEdge(vert1, vert2) ? 0 : 1;
     S32 bias1 = IsLeftOrTopEdge(vert2, vert0) ? 0 : 1;
     S32 bias2 = IsLeftOrTopEdge(vert0, vert1) ? 0 : 1;
 
     R32 triangle_area = (R32)SignedArea(vert0, vert1, vert2);
 
+    V2 pixel_coord = {(R32)min_x, (R32)min_y};
+    S32 w0_row_start = SignedArea(vert1, vert2, pixel_coord) + bias0;
+    S32 w1_row_start = SignedArea(vert2, vert0, pixel_coord) + bias1;
+    S32 w2_row_start = SignedArea(vert0, vert1, pixel_coord) + bias2;
+
     U8 *row = (U8 *)bitmap->memory + min_x*bitmap->bytes_per_pixel + min_y*bitmap->pitch;
     for (int y = min_y; y < max_y; y++) {
+        S32 weight0 = w0_row_start;
+        S32 weight1 = w1_row_start;
+        S32 weight2 = w2_row_start;
         U32 *pixel = (U32 *)row;
         for (int x = min_x; x < max_x; x++) {
-            V2 pixel_coord = {(R32)x, (R32)y};
-            S32 weight0 = SignedArea(vert1, vert2, pixel_coord) + bias0;
-            S32 weight1 = SignedArea(vert2, vert0, pixel_coord) + bias1;
-            S32 weight2 = SignedArea(vert0, vert1, pixel_coord) + bias2;
-
             if (weight0 <= 0 && weight1 <= 0 && weight2 <= 0) {
                 R32 ratio0 = weight0 / triangle_area;
                 R32 ratio1 = weight1 / triangle_area;
@@ -207,7 +226,6 @@ INTERNAL void DrawTriangle(Win32_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, V
                 R32 g = (ratio0*col0.g) + (ratio1*col1.g) + (ratio2*col2.g);
                 R32 b = (ratio0*col0.b) + (ratio1*col1.b) + (ratio2*col2.b);
 
-
                 U8 red   = r * 255.0f;
                 U8 green = g * 255.0f;
                 U8 blue  = b * 255.0f;
@@ -216,8 +234,14 @@ INTERNAL void DrawTriangle(Win32_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, V
 
                 *pixel = col;
             }
+            weight0 += w0_dx;
+            weight1 += w1_dx;
+            weight2 += w2_dx;
             pixel++;
         }
+        w0_row_start += w0_dy;
+        w1_row_start += w1_dy;
+        w2_row_start += w2_dy;
         row += bitmap->pitch;
     }
 }
