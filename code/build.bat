@@ -2,7 +2,7 @@
 
 mkdir ..\build
 pushd ..\build
-cl -FC -Zi ..\code\raster.cpp user32.lib gdi32.lib winmm.lib
+cl -DGAME_SLOW=1 -DGAME_INTERNAL=1 -FC -Zi ..\code\win32_platform.cpp user32.lib gdi32.lib winmm.lib
 popd
 
 
