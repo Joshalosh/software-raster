@@ -81,6 +81,43 @@ INTERNAL void Win32CopyBitmapToWindow(HDC device_context, Win32_Bitmap bitmap,
                   &bitmap.info, DIB_RGB_COLORS, SRCCOPY);
 }
 
+INTERNAL void *DEBUGPlatformReadEntireFile(char *filename) {
+    void *result = 0;
+    HANDLE file_handle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+    if (file_handle != INVALID_HANDLE_VALUE) {
+        LARGE_INTEGER file_size;
+        if (GetFileSizeEx(file_handle, &file_size)) {
+            U32 file_size32 = SafeU64ToU32(file_size.QuadPart);
+            result = VirtualAlloc(0, file_size32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+            if (result) {
+                DWORD bytes_read;
+                if (ReadFile(file_handle, result, file_size32, &bytes_read, 0) && (file_size32 == bytes_read)) {
+                    // The file was read succesfully.
+                } else {
+                    // TODO: Log that the file wasn't successfully read.
+                    DEBUGPlatformFreeFileMemory(result);
+                    result = 0;
+                }
+            } else {
+                // TODO: Log that memory allocation has failed.
+            }
+        } else {
+            // TODO: Log that the handle file size was not extracted successfully.
+        }
+
+        CloseHandle(file_handle);
+    } else {
+        // TODO: Log the file handle was not created successfully.
+    }
+    return result;
+}
+
+INTERNAL void DEBUGPlatformFreeFileMemory(void *memory) {
+    if (memory) {
+        VirtualFree(memory, 0, MEM_RELEASE);
+    }
+}
+
 LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_param, LPARAM l_param) {
     LRESULT result = 0;
     switch (message) {

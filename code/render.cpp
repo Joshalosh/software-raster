@@ -92,6 +92,7 @@ INTERNAL void DrawTriangle(Game_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, V4
     S32 bias2 = IsLeftOrTopEdge(vert0, vert1) ? 0 : 1;
 
     R32 triangle_area = (R32)SignedArea(vert0, vert1, vert2);
+    R32 inverse_triangle_area = 1/triangle_area;
 
     V2 pixel_coord = {(R32)min_x, (R32)min_y};
     S32 w0_row_start = SignedArea(vert1, vert2, pixel_coord) + bias0;
@@ -106,17 +107,17 @@ INTERNAL void DrawTriangle(Game_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, V4
         U32 *pixel = (U32 *)row;
         for (int x = min_x; x < max_x; x++) {
             if (weight0 <= 0 && weight1 <= 0 && weight2 <= 0) {
-                R32 ratio0 = weight0 / triangle_area;
-                R32 ratio1 = weight1 / triangle_area;
-                R32 ratio2 = weight2 / triangle_area;
+                R32 ratio0 = weight0 * inverse_triangle_area;
+                R32 ratio1 = weight1 * inverse_triangle_area;
+                R32 ratio2 = weight2 * triangle_area;
 
                 R32 r = (ratio0*col0.r) + (ratio1*col1.r) + (ratio2*col2.r);
                 R32 g = (ratio0*col0.g) + (ratio1*col1.g) + (ratio2*col2.g);
                 R32 b = (ratio0*col0.b) + (ratio1*col1.b) + (ratio2*col2.b);
 
-                U8 red   = r * 255.0f;
-                U8 green = g * 255.0f;
-                U8 blue  = b * 255.0f;
+                U8 red   = (U8)((r * 255.0f) + 0.5f);
+                U8 green = (U8)((g * 255.0f) + 0.5f);
+                U8 blue  = (U8)((b * 255.0f) + 0.5f);
 
                 U32 col = ((red << 16) | (green << 8) | blue);
 
@@ -137,6 +138,12 @@ INTERNAL void DrawTriangle(Game_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, V4
 
 INTERNAL void GameUpdateAndRender(Game_Memory *memory, Game_Bitmap *bitmap) {
     if (!memory->is_initialised) {
+        char *filename = __FILE__;
+        void *bitmap_memory = DEBUGPlatformReadEntireFile(filename);
+        if (bitmap_memory) {
+            DEBUGPlatformFreeFileMemory(bitmap_memory);
+        }
+
         memory->is_initialised = true;
     }
     //RenderGradient(bitmap, x_offset, y_offset);

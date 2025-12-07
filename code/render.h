@@ -13,6 +13,20 @@
 #define ASSERT(expression)
 #endif
 
+INTERNAL U32 SafeU64ToU32(U64 input) {
+    ASSERT(input <= 0xFFFFFFFF)
+    U32 result = (U32)input;
+    return result;
+}
+
+// Services that the platform layer provides to the game
+#if GAME_INTERNAL
+INTERNAL void *DEBUGPlatformReadEntireFile(char *filename);
+INTERNAL void  DEBUGPlatformFreeFileMemory(void *memory);
+INTERNAL B32   DEBUGPlatformWriteEntireFile(char *filename, U32 memory_size, void *memory);
+#endif
+// Services that the game provides to the platform layer
+
 struct Game_Bitmap {
 void *memory;
 int  width;
