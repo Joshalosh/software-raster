@@ -81,22 +81,23 @@ INTERNAL void Win32CopyBitmapToWindow(HDC device_context, Win32_Bitmap bitmap,
                   &bitmap.info, DIB_RGB_COLORS, SRCCOPY);
 }
 
-INTERNAL void *DEBUGPlatformReadEntireFile(char *filename) {
-    void *result = 0;
+INTERNAL Debug_Read_File_Result DEBUGPlatformReadEntireFile(char *filename) {
+    Debug_Read_File_Result result = {};
     HANDLE file_handle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
     if (file_handle != INVALID_HANDLE_VALUE) {
         LARGE_INTEGER file_size;
         if (GetFileSizeEx(file_handle, &file_size)) {
             U32 file_size32 = SafeU64ToU32(file_size.QuadPart);
-            result = VirtualAlloc(0, file_size32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-            if (result) {
+            result.content = VirtualAlloc(0, file_size32, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+            if (result.content) {
                 DWORD bytes_read;
-                if (ReadFile(file_handle, result, file_size32, &bytes_read, 0) && (file_size32 == bytes_read)) {
+                if (ReadFile(file_handle, result.content, file_size32, &bytes_read, 0) && (file_size32 == bytes_read)) {
                     // The file was read succesfully.
+                    result.content_size = file_size32;
                 } else {
                     // TODO: Log that the file wasn't successfully read.
-                    DEBUGPlatformFreeFileMemory(result);
-                    result = 0;
+                    DEBUGPlatformFreeFileMemory(result.content);
+                    result.content = 0;
                 }
             } else {
                 // TODO: Log that memory allocation has failed.
@@ -116,6 +117,25 @@ INTERNAL void DEBUGPlatformFreeFileMemory(void *memory) {
     if (memory) {
         VirtualFree(memory, 0, MEM_RELEASE);
     }
+}
+
+INTERNAL B32 DEBUGPlatformWriteEntireFile(char *filename, U32 memory_size, void *memory) {
+    B32 result = false;
+
+    HANDLE file_handle = CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+    if (file_handle != INVALID_HANDLE_VALUE) {
+        DWORD bytes_written;  
+        if (WriteFile(file_handle, memory, memory_size, &bytes_written, 0)) {
+            result = (bytes_written == memory_size);
+        } else {
+            // TODO: Log that file write failed.
+        }
+
+        CloseHandle(file_handle);
+    } else {
+        // TODO: Log the file handle was not created successfully.
+    }
+    return result;
 }
 
 LRESULT CALLBACK Win32MainWindowCallback(HWND window, UINT message, WPARAM w_param, LPARAM l_param) {

@@ -21,9 +21,13 @@ INTERNAL U32 SafeU64ToU32(U64 input) {
 
 // Services that the platform layer provides to the game
 #if GAME_INTERNAL
-INTERNAL void *DEBUGPlatformReadEntireFile(char *filename);
-INTERNAL void  DEBUGPlatformFreeFileMemory(void *memory);
-INTERNAL B32   DEBUGPlatformWriteEntireFile(char *filename, U32 memory_size, void *memory);
+struct Debug_Read_File_Result {
+    U32   content_size;
+    void *content;
+};
+INTERNAL Debug_Read_File_Result DEBUGPlatformReadEntireFile(char *filename);
+INTERNAL void                   DEBUGPlatformFreeFileMemory(void *memory);
+INTERNAL B32                    DEBUGPlatformWriteEntireFile(char *filename, U32 memory_size, void *memory);
 #endif
 // Services that the game provides to the platform layer
 
