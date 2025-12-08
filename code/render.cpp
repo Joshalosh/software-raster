@@ -7,8 +7,8 @@ INTERNAL void RenderGradient(Game_Bitmap bitmap, int x_offset, int y_offset) {
         U32 *pixel = (U32 *)row;
         for (int x = 0; x < bitmap.width; x++) { 
 
-            U8 blue = x + x_offset;
-            U8 green = y + y_offset;
+            U8 blue = (U8)(x + x_offset);
+            U8 green = (U8)(y + y_offset);
 
             *pixel++ = ((green << 8) | blue);
         }
@@ -47,7 +47,7 @@ INTERNAL S32 SignedArea(V2 origin, V2 point1, V2 point2) {
     S32 result;
     V2 vector1 = point1 - origin;
     V2 vector2 = point2 - origin;
-    result = (vector1.x*vector2.y) - (vector1.y*vector2.x);
+    result = (S32)((vector1.x*vector2.y) - (vector1.y*vector2.x));
     return result;
 }
 

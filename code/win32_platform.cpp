@@ -175,7 +175,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
     g_tick_frequency = tick_frequency_result.QuadPart;
 
     WNDCLASS window_class    = {};
-    Win32ResizeDIBSection(&g_bitmap, 1280, 720);
+    Win32ResizeDIBSection(&g_bitmap, 960, 540);
     window_class.style       = CS_HREDRAW|CS_VREDRAW|CS_OWNDC;
     window_class.lpfnWndProc = Win32MainWindowCallback;
     window_class.hInstance   = instance;
@@ -254,8 +254,8 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                     U64 end_cycle_count = __rdtsc();
                     LARGE_INTEGER current_ticks = Win32GetTickCount();
                     R32 fps = (R32)g_tick_frequency / (current_ticks.QuadPart - begin_frame_count.QuadPart); 
-                    R64 cycles_this_frame = end_cycle_count - begin_cycle_count;
-                    R32 mega_cycles_per_frame = cycles_this_frame / (1000.0f*1000.0f);
+                    R64 cycles_this_frame = (R64)(end_cycle_count - begin_cycle_count);
+                    R32 mega_cycles_per_frame = (R32)(cycles_this_frame / (1000.0f*1000.0f));
                     R32 ms_per_frame = 1000.0f*frame_seconds_elapsed;
 
                     char buffer[256];
