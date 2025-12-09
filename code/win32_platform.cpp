@@ -1,26 +1,6 @@
 
-#include <stdint.h>
 
-#define GLOBAL        static // Explicit for global variables
-#define LOCAL_PERSIST static // Explicit for locally persisting variables
-#define INTERNAL      static // Explicit for functions internal to the translation unit
-
-typedef uint8_t  U8;
-typedef uint16_t U16;
-typedef uint32_t U32;
-typedef uint64_t U64;
-
-typedef int8_t   S8;
-typedef int16_t  S16;
-typedef int32_t  S32;
-typedef int64_t  S64;
-
-typedef int32_t  B32;
-typedef float    R32;
-typedef double   R64;
-
-#include "mymath.h"
-#include "render.cpp"
+#include "render.h"
 
 #include <windows.h>
 #include <stdio.h>
@@ -54,24 +34,28 @@ Win32_Window_Dimension Win32GetWindowDimension(HWND window) {
 }
 
 INTERNAL void Win32ResizeDIBSection(Win32_Bitmap *bitmap, int width, int height) {
-    if (bitmap->memory) {
-        VirtualFree(bitmap->memory, 0, MEM_RELEASE);
+    S32 bytes_per_pixel = 4;
+    S32 bitmap_memory_size = width * height * bytes_per_pixel;
+    void *new_memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
+    if (new_memory) {
+        if (bitmap->memory) {
+            VirtualFree(bitmap->memory, 0, MEM_RELEASE);
+        }
+
+        bitmap->width  = width;
+        bitmap->height = height;
+        bitmap->bytes_per_pixel = bytes_per_pixel;
+
+        bitmap->info.bmiHeader.biSize        = sizeof(bitmap->info.bmiHeader);
+        bitmap->info.bmiHeader.biWidth       = bitmap->width;
+        bitmap->info.bmiHeader.biHeight      = -bitmap->height;
+        bitmap->info.bmiHeader.biPlanes      = 1;
+        bitmap->info.bmiHeader.biBitCount    = 32;
+        bitmap->info.bmiHeader.biCompression = BI_RGB;
+
+        bitmap->memory = new_memory;
+        bitmap->pitch  = bitmap->width * bitmap->bytes_per_pixel;
     }
-
-    bitmap->width  = width;
-    bitmap->height = height;
-    bitmap->bytes_per_pixel = 4;
-
-    bitmap->info.bmiHeader.biSize        = sizeof(bitmap->info.bmiHeader);
-    bitmap->info.bmiHeader.biWidth       = bitmap->width;
-    bitmap->info.bmiHeader.biHeight      = -bitmap->height;
-    bitmap->info.bmiHeader.biPlanes      = 1;
-    bitmap->info.bmiHeader.biBitCount    = 32;
-    bitmap->info.bmiHeader.biCompression = BI_RGB;
-
-    int bitmap_memory_size = bitmap->width * bitmap->height * bitmap->bytes_per_pixel;
-    bitmap->memory = VirtualAlloc(0, bitmap_memory_size, MEM_COMMIT, PAGE_READWRITE);
-    bitmap->pitch  = bitmap->width * bitmap->bytes_per_pixel;
 }
 
 INTERNAL void Win32CopyBitmapToWindow(HDC device_context, Win32_Bitmap bitmap, 
@@ -81,7 +65,13 @@ INTERNAL void Win32CopyBitmapToWindow(HDC device_context, Win32_Bitmap bitmap,
                   &bitmap.info, DIB_RGB_COLORS, SRCCOPY);
 }
 
-INTERNAL Debug_Read_File_Result DEBUGPlatformReadEntireFile(char *filename) {
+DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemory) {
+    if (memory) {
+        VirtualFree(memory, 0, MEM_RELEASE);
+    }
+}
+
+DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile) {
     Debug_Read_File_Result result = {};
     HANDLE file_handle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
     if (file_handle != INVALID_HANDLE_VALUE) {
@@ -113,13 +103,7 @@ INTERNAL Debug_Read_File_Result DEBUGPlatformReadEntireFile(char *filename) {
     return result;
 }
 
-INTERNAL void DEBUGPlatformFreeFileMemory(void *memory) {
-    if (memory) {
-        VirtualFree(memory, 0, MEM_RELEASE);
-    }
-}
-
-INTERNAL B32 DEBUGPlatformWriteEntireFile(char *filename, U32 memory_size, void *memory) {
+DEBUG_PLATFORM_WRITE_ENTIRE_FILE(DEBUGPlatformWriteEntireFile) {
     B32 result = false;
 
     HANDLE file_handle = CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
@@ -169,7 +153,29 @@ INTERNAL R32 Win32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return result;
 }
 
+struct Win32_Game_Code {
+    HMODULE game_code_dll;
+    Game_Update_And_Render *update_and_render;
+    B32 is_valid;
+};
+INTERNAL Win32_Game_Code Win32LoadGameCode() {
+    Win32_Game_Code result = {};
+    result.game_code_dll = LoadLibraryA("game.dll");
+    if (result.game_code_dll) {
+        result.update_and_render = (Game_Update_And_Render *)
+                                   GetProcAddress(result.game_code_dll, "GameUpdateAndRender");
+        result.is_valid = result.update_and_render ? true : false;
+    }
+    if (!result.is_valid) {
+        result.update_and_render = GameUpdateAndRenderStub;
+    }
+    return result;
+}
+
+
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line, int show_command_line) {
+    Win32_Game_Code Game = Win32LoadGameCode();
+
     LARGE_INTEGER tick_frequency_result;
     QueryPerformanceFrequency(&tick_frequency_result);
     g_tick_frequency = tick_frequency_result.QuadPart;
@@ -202,8 +208,12 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
             LPVOID base_address = 0;
 #endif
             Game_Memory game_memory = {};
-            game_memory.persisting_storage_size = MEGABYTES(64);
-            game_memory.temporary_storage_size  = GIGABYTES(4);
+            game_memory.persisting_storage_size      = MEGABYTES(64);
+            game_memory.temporary_storage_size       = GIGABYTES(4);
+            game_memory.DEBUGPlatformFreeFileMemory  = DEBUGPlatformFreeFileMemory;
+            game_memory.DEBUGPlatformReadEntireFile  = DEBUGPlatformReadEntireFile;
+            game_memory.DEBUGPlatformWriteEntireFile = DEBUGPlatformWriteEntireFile;
+
             U64 total_memory_size               = game_memory.persisting_storage_size + 
                                                   game_memory.temporary_storage_size;
             game_memory.persisting_storage      = VirtualAlloc(base_address, total_memory_size, 
@@ -230,7 +240,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                     bitmap.height          = g_bitmap.height;
                     bitmap.pitch           = g_bitmap.pitch;
                     bitmap.bytes_per_pixel = g_bitmap.bytes_per_pixel;
-                    GameUpdateAndRender(&game_memory, &bitmap);
+                    Game.update_and_render(&game_memory, &bitmap);
 
                     Win32_Window_Dimension dimension = Win32GetWindowDimension(window);
                     Win32CopyBitmapToWindow(device_context, g_bitmap, dimension.width, dimension.height);

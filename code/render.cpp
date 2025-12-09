@@ -136,13 +136,13 @@ INTERNAL void DrawTriangle(Game_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, V4
 }
 
 
-INTERNAL void GameUpdateAndRender(Game_Memory *memory, Game_Bitmap *bitmap) {
+GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (!memory->is_initialised) {
         char *filename = __FILE__;
-        Debug_Read_File_Result file = DEBUGPlatformReadEntireFile(filename);
+        Debug_Read_File_Result file = memory->DEBUGPlatformReadEntireFile(filename);
         if (file.content) {
-            DEBUGPlatformWriteEntireFile("test.out", file.content_size, file.content);
-            DEBUGPlatformFreeFileMemory(file.content);
+            memory->DEBUGPlatformWriteEntireFile("test.out", file.content_size, file.content);
+            memory->DEBUGPlatformFreeFileMemory(file.content);
         }
 
         memory->is_initialised = true;
