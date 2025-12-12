@@ -136,7 +136,7 @@ INTERNAL void DrawTriangle(Game_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, V4
 }
 
 
-GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
+extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (!memory->is_initialised) {
         char *filename = __FILE__;
         Debug_Read_File_Result file = memory->DEBUGPlatformReadEntireFile(filename);
@@ -157,7 +157,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     V4  green  = {0.85f, 0.7f,  0.05f, 1.0f};
     V4  blue   = {0.06f, 0.50f, 0.80f, 1.0f};
 
-    DrawRectangle(bitmap, V2{0.0f, 0.0f}, V2{(R32)bitmap->width, (R32)bitmap->height}, purple);
+    DrawRectangle(bitmap, V2{0.0f, 0.0f}, V2{(R32)bitmap->width, (R32)bitmap->height}, white);
     //DrawRectangle(bitmap, V2{20.0f, 20.0f}, V2{21.0f, 21.0f}, 0x0000FF00);
     DrawTriangle(bitmap, V2{100, 600}, V2{300, 600}, V2{200, 200}, col0, col1, col2);
     DrawTriangle(bitmap, V2{500, 450}, V2{200, 200}, V2{300, 600}, red, green, blue);

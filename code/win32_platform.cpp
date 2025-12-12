@@ -153,14 +153,29 @@ INTERNAL R32 Win32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end) {
     return result;
 }
 
+INTERNAL FILETIME Win32GetLastWriteTime(char *filename) {
+    FILETIME last_write_time = {};
+    WIN32_FIND_DATA find_data;
+    HANDLE find_handle = FindFirstFileA(filename, &find_data);
+    if (find_handle != INVALID_HANDLE_VALUE) {
+        last_write_time = find_data.ftLastWriteTime;
+        FindClose(find_handle);
+    }
+    return last_write_time;
+}
+
 struct Win32_Game_Code {
     HMODULE game_code_dll;
+    FILETIME last_dll_write_time;
     Game_Update_And_Render *update_and_render;
     B32 is_valid;
 };
-INTERNAL Win32_Game_Code Win32LoadGameCode() {
+INTERNAL Win32_Game_Code Win32LoadGameCode(char *source_dll_name, char *temp_dll_name) {
     Win32_Game_Code result = {};
-    result.game_code_dll = LoadLibraryA("game.dll");
+
+    result.last_dll_write_time = Win32GetLastWriteTime(temp_dll_name);
+    CopyFile(source_dll_name, temp_dll_name, FALSE);
+    result.game_code_dll = LoadLibraryA(source_dll_name);
     if (result.game_code_dll) {
         result.update_and_render = (Game_Update_And_Render *)
                                    GetProcAddress(result.game_code_dll, "GameUpdateAndRender");
@@ -172,10 +187,30 @@ INTERNAL Win32_Game_Code Win32LoadGameCode() {
     return result;
 }
 
+INTERNAL void Win32UnloadGameCode(Win32_Game_Code *game_code) {
+    if (game_code->game_code_dll) {     
+        FreeLibrary(game_code->game_code_dll);
+        game_code->game_code_dll = 0;
+    }
+
+    game_code->is_valid = false;
+    game_code->update_and_render = GameUpdateAndRenderStub;
+}
+
+INTERNAL void ConcatenateStrings(size_t source_a_count, char *source_a, size_t source_b_count, char *source_b, 
+                                 size_t dest_count, char *dest) {
+    ASSERT(source_a_count + source_b_count < dest_count);
+    for (S32 index = 0; index < source_a_count; index++) {
+        *dest++ = *source_a++;
+    }
+    for (S32 index = 0; index < source_b_count; index++) {
+        *dest++ = *source_b++;
+    }
+    *dest = 0;
+}
+
 
 int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_line, int show_command_line) {
-    Win32_Game_Code Game = Win32LoadGameCode();
-
     LARGE_INTEGER tick_frequency_result;
     QueryPerformanceFrequency(&tick_frequency_result);
     g_tick_frequency = tick_frequency_result.QuadPart;
@@ -222,9 +257,39 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                                                         game_memory.persisting_storage_size;
             if (game_memory.persisting_storage && game_memory.temporary_storage) {
                 g_running = true;
+
+                char exe_filename[MAX_PATH]; // Max path is a little bit dodgey.
+                DWORD size_of_filename = GetModuleFileNameA(0, exe_filename, sizeof(exe_filename));
+                char *one_past_last_slash = exe_filename;
+                for (char *scan = exe_filename; *scan; scan++) {
+                    if (*scan == '\\') {
+                        one_past_last_slash = ++scan;
+                    }
+                }
+
+                char source_dll_name[] = "render.dll";
+                char source_dll_full_path[MAX_PATH];
+                ConcatenateStrings(one_past_last_slash - exe_filename, exe_filename,
+                                   sizeof(source_dll_name) - 1, source_dll_name,
+                                   sizeof(source_dll_full_path), source_dll_full_path);
+
+                char temp_dll_name[] = "render_temp.dll";
+                char temp_dll_full_path[MAX_PATH];
+                ConcatenateStrings(one_past_last_slash - exe_filename, exe_filename,
+                                   sizeof(temp_dll_name) - 1, temp_dll_name,
+                                   sizeof(temp_dll_full_path), temp_dll_full_path);
+
+                Win32_Game_Code game = Win32LoadGameCode(source_dll_name, temp_dll_name);
                 LARGE_INTEGER begin_frame_count = Win32GetTickCount();
                 U64 begin_cycle_count = __rdtsc();
+
                 while(g_running) {
+                    FILETIME new_dll_write_time = Win32GetLastWriteTime(source_dll_name);
+                    if (CompareFileTime(&new_dll_write_time, &game.last_dll_write_time) != 0) {
+                        Win32UnloadGameCode(&game);
+                        game = Win32LoadGameCode(source_dll_name, temp_dll_name);
+                    }
+
                     MSG message; 
                     while (PeekMessage(&message, 0, 0, 0, PM_REMOVE)) {
                         if (message.message == WM_QUIT) { 
@@ -240,7 +305,7 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
                     bitmap.height          = g_bitmap.height;
                     bitmap.pitch           = g_bitmap.pitch;
                     bitmap.bytes_per_pixel = g_bitmap.bytes_per_pixel;
-                    Game.update_and_render(&game_memory, &bitmap);
+                    game.update_and_render(&game_memory, &bitmap);
 
                     Win32_Window_Dimension dimension = Win32GetWindowDimension(window);
                     Win32CopyBitmapToWindow(device_context, g_bitmap, dimension.width, dimension.height);

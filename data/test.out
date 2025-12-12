@@ -7,8 +7,8 @@ INTERNAL void RenderGradient(Game_Bitmap bitmap, int x_offset, int y_offset) {
         U32 *pixel = (U32 *)row;
         for (int x = 0; x < bitmap.width; x++) { 
 
-            U8 blue = x + x_offset;
-            U8 green = y + y_offset;
+            U8 blue = (U8)(x + x_offset);
+            U8 green = (U8)(y + y_offset);
 
             *pixel++ = ((green << 8) | blue);
         }
@@ -47,7 +47,7 @@ INTERNAL S32 SignedArea(V2 origin, V2 point1, V2 point2) {
     S32 result;
     V2 vector1 = point1 - origin;
     V2 vector2 = point2 - origin;
-    result = (vector1.x*vector2.y) - (vector1.y*vector2.x);
+    result = (S32)((vector1.x*vector2.y) - (vector1.y*vector2.x));
     return result;
 }
 
@@ -136,13 +136,13 @@ INTERNAL void DrawTriangle(Game_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, V4
 }
 
 
-INTERNAL void GameUpdateAndRender(Game_Memory *memory, Game_Bitmap *bitmap) {
+extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (!memory->is_initialised) {
         char *filename = __FILE__;
-        Debug_Read_File_Result file = DEBUGPlatformReadEntireFile(filename);
+        Debug_Read_File_Result file = memory->DEBUGPlatformReadEntireFile(filename);
         if (file.content) {
-            DEBUGPlatformWriteEntireFile("test.out", file.content_size, file.content);
-            DEBUGPlatformFreeFileMemory(file.content);
+            memory->DEBUGPlatformWriteEntireFile("test.out", file.content_size, file.content);
+            memory->DEBUGPlatformFreeFileMemory(file.content);
         }
 
         memory->is_initialised = true;
@@ -157,7 +157,7 @@ INTERNAL void GameUpdateAndRender(Game_Memory *memory, Game_Bitmap *bitmap) {
     V4  green  = {0.85f, 0.7f,  0.05f, 1.0f};
     V4  blue   = {0.06f, 0.50f, 0.80f, 1.0f};
 
-    DrawRectangle(bitmap, V2{0.0f, 0.0f}, V2{(R32)bitmap->width, (R32)bitmap->height}, purple);
+    DrawRectangle(bitmap, V2{0.0f, 0.0f}, V2{(R32)bitmap->width, (R32)bitmap->height}, white);
     //DrawRectangle(bitmap, V2{20.0f, 20.0f}, V2{21.0f, 21.0f}, 0x0000FF00);
     DrawTriangle(bitmap, V2{100, 600}, V2{300, 600}, V2{200, 200}, col0, col1, col2);
     DrawTriangle(bitmap, V2{500, 450}, V2{200, 200}, V2{300, 600}, red, green, blue);
