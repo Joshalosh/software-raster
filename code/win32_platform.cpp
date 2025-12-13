@@ -172,14 +172,16 @@ struct Win32_Game_Code {
 };
 INTERNAL Win32_Game_Code Win32LoadGameCode(char *source_dll_name, char *temp_dll_name) {
     Win32_Game_Code result = {};
-
     result.last_dll_write_time = Win32GetLastWriteTime(temp_dll_name);
-    CopyFile(source_dll_name, temp_dll_name, FALSE);
-    result.game_code_dll = LoadLibraryA(source_dll_name);
-    if (result.game_code_dll) {
-        result.update_and_render = (Game_Update_And_Render *)
-                                   GetProcAddress(result.game_code_dll, "GameUpdateAndRender");
-        result.is_valid = result.update_and_render ? true : false;
+    if (CopyFile(source_dll_name, temp_dll_name, FALSE)) { 
+        result.game_code_dll = LoadLibraryA(temp_dll_name);
+        if (result.game_code_dll) {
+            result.update_and_render = (Game_Update_And_Render *)
+                                       GetProcAddress(result.game_code_dll, "GameUpdateAndRender");
+            result.is_valid = (result.update_and_render != 0);
+        }
+    } else {
+        // TODO: The copy faild, log dat shit.
     }
     if (!result.is_valid) {
         result.update_and_render = GameUpdateAndRenderStub;
@@ -260,23 +262,31 @@ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR command_
 
                 char exe_filename[MAX_PATH]; // Max path is a little bit dodgey.
                 DWORD size_of_filename = GetModuleFileNameA(0, exe_filename, sizeof(exe_filename));
+                // TODO: one_past_last_slash needs a better backup solution if GetModuleFileNameA fails.
+                if (size_of_filename == 0 || size_of_filename == sizeof(exe_filename)) {
+                    // TODO: Log error that the executable couldn't be found or the path was too long
+                    return 0;
+                }
+
                 char *one_past_last_slash = exe_filename;
                 for (char *scan = exe_filename; *scan; scan++) {
                     if (*scan == '\\') {
-                        one_past_last_slash = ++scan;
+                        one_past_last_slash = scan + 1;
                     }
                 }
 
                 char source_dll_name[] = "render.dll";
+                size_t source_dll_name_length_without_null_terminator = sizeof(source_dll_name) - 1;
                 char source_dll_full_path[MAX_PATH];
                 ConcatenateStrings(one_past_last_slash - exe_filename, exe_filename,
-                                   sizeof(source_dll_name) - 1, source_dll_name,
+                                   source_dll_name_length_without_null_terminator, source_dll_name,
                                    sizeof(source_dll_full_path), source_dll_full_path);
 
                 char temp_dll_name[] = "render_temp.dll";
+                size_t temp_dll_name_length_without_null_terminator = sizeof(temp_dll_name) - 1;
                 char temp_dll_full_path[MAX_PATH];
                 ConcatenateStrings(one_past_last_slash - exe_filename, exe_filename,
-                                   sizeof(temp_dll_name) - 1, temp_dll_name,
+                                   temp_dll_name_length_without_null_terminator, temp_dll_name,
                                    sizeof(temp_dll_full_path), temp_dll_full_path);
 
                 Win32_Game_Code game = Win32LoadGameCode(source_dll_name, temp_dll_name);
