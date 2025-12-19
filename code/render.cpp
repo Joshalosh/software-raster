@@ -169,6 +169,13 @@ INTERNAL U32 *DEBUGLoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char
     if (read_result.content_size != 0) {
         Bitmap_Header *header = (Bitmap_Header *)read_result.content;
         U32 *pixels = (U32 *)((U8 *)read_result.content + header->bitmap_offset);
+#if 0
+        U32 *pixels = (U32 *)((U8 *)read_result.content + header->bitmap_offset);
+        U8 *pixels_ptr = (U8 *)pixels; 
+        pixels_ptr += header->width * (header->height - 1);
+
+        result = (U32 *)pixels_ptr;
+#endif
         result = pixels;
     }
 
@@ -206,13 +213,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         char *bmp_1 = "art.bmp";
         char *bmp_2 = "test_background.bmp";
         char *bmp_3 = "gimp.bmp";
-        game_state->pixel_ptr = TestLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_1, bmp_2);
-        //game_state->pixel_ptr = DEBUGLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
+        //game_state->pixel_ptr = TestLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_1, bmp_2);
+        game_state->pixel_ptr = DEBUGLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
 
         memory->is_initialised = true;
     }
     //RenderGradient(bitmap, x_offset, y_offset);
-    U32 purple = 0x00FF0000;
+    U32 purple = 0x00FF00FF;
     U32 white  = 0x00FFFFFF;
     V4  col0   = {0.03f, 0.52f, 0.63f, 1.0f};
     //V4  col0   = {0.0f, 0.0f, 1.0f, 1.0f};
@@ -228,7 +235,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     DrawTriangle(bitmap, V2{250, 225}, V2{100, 100}, V2{150, 300}, red, green, blue);
     DrawTriangle(bitmap, V2{450, 425}, V2{400, 400}, V2{350, 500}, red, green, blue);
 
-#if 0
+#if 1
     S32 pixel_width = 60;
     S32 pixel_height = 40;
 
@@ -237,14 +244,17 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (blit_width > bitmap->width) blit_width = bitmap->width;
     if (blit_height > bitmap->height) blit_height = bitmap->height;
 
-    U32 *src = game_state->pixel_ptr;
+    U32 src_pitch = pixel_width*4;
+    U8 *src_row = (U8 *)game_state->pixel_ptr + pixel_width * (pixel_height-1)*4;
     U8 *dest_row = (U8 *)bitmap->memory;
-    for (S32 y = 0; y < pixel_height; y++) {
+    for (S32 y = 0; y < blit_height; y++) {
         U32 *dest = (U32 *)dest_row;
-        for (S32 x = 0; x < pixel_width; x++) {
+        U32 *src  = (U32 *)src_row;
+        for (S32 x = 0; x < blit_width; x++) {
             *dest++ = *src++;
         }
         dest_row += bitmap->pitch;
+        src_row -= src_pitch;
     }
 #endif
 }

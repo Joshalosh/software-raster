@@ -22,3 +22,7 @@ struct Win32_Game_Code {
     Game_Update_And_Render *update_and_render;
     B32 is_valid;
 };
+
+// pixasquare - AARRGGBB - top-down
+// GIMP       - AARRGGBB - bottom-up
+// Casey      - RRGGBBAA - bottom-up
