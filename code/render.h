@@ -66,6 +66,10 @@ int  pitch;
 int  bytes_per_pixel;
 };
 
+struct Game_State {
+    U32 *pixel_ptr;
+};
+
 struct Game_Memory {
     B32   is_initialised;
     U64   persisting_storage_size;
@@ -80,5 +84,3 @@ struct Game_Memory {
 
 #define GAME_UPDATE_AND_RENDER(name) void name(Game_Memory *memory, Game_Bitmap *bitmap)
 typedef GAME_UPDATE_AND_RENDER(Game_Update_And_Render);
-GAME_UPDATE_AND_RENDER(GameUpdateAndRenderStub) {
-}

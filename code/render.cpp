@@ -114,12 +114,14 @@ INTERNAL void DrawTriangle(Game_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, V4
                 R32 r = (ratio0*col0.r) + (ratio1*col1.r) + (ratio2*col2.r);
                 R32 g = (ratio0*col0.g) + (ratio1*col1.g) + (ratio2*col2.g);
                 R32 b = (ratio0*col0.b) + (ratio1*col1.b) + (ratio2*col2.b);
+                R32 a = (ratio0*col0.a) + (ratio1*col1.a) + (ratio2*col2.a);
 
                 U8 red   = (U8)((r * 255.0f) + 0.5f);
                 U8 green = (U8)((g * 255.0f) + 0.5f);
                 U8 blue  = (U8)((b * 255.0f) + 0.5f);
+                U8 alpha = (U8)((a * 255.0f) + 0.5f);
 
-                U32 col = ((red << 16) | (green << 8) | blue);
+                U32 col = ((alpha << 24) | (red << 16) | (green << 8) | blue);
 
                 *pixel = col;
             }
@@ -135,22 +137,85 @@ INTERNAL void DrawTriangle(Game_Bitmap *bitmap, V2 vert0, V2 vert1, V2 vert2, V4
     }
 }
 
+#pragma pack(push, 1)
+struct Bitmap_Header {
+    U16 file_type;
+    U32 file_size;
+    U16 reserved_1;
+    U16 reserved_2;
+    U32 bitmap_offset;
+    U32 size;
+    S32 width;
+    S32 height;
+    U16 planes;
+    U16 bits_per_pixel;
+    U32 compression;
+    U32 image_size;
+    U32 pixels_per_metre_x;
+    U32 pixels_per_metre_y;
+    U32 cols_used;
+    U32 cols_important;
+    U32 red_mask;
+    U32 green_mask;
+    U32 blue_mask;
+    U32 alpha_mask;
+};
+#pragma pack(pop)
 
+INTERNAL U32 *DEBUGLoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *filename) {
+    U32 *result = 0;
+
+    Debug_Read_File_Result read_result = ReadEntireFile(filename);
+    if (read_result.content_size != 0) {
+        Bitmap_Header *header = (Bitmap_Header *)read_result.content;
+        U32 *pixels = (U32 *)((U8 *)read_result.content + header->bitmap_offset);
+        result = pixels;
+    }
+
+    return result;
+}
+
+INTERNAL U32 *TestLoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *filename_1, char *filename_2) {
+    U32 *result_1 = 0;
+    U32 *result_2 = 0;
+
+    Debug_Read_File_Result read_result_1 = ReadEntireFile(filename_1);
+    Debug_Read_File_Result read_result_2 = ReadEntireFile(filename_2);
+    if ((read_result_1.content_size != 0) && (read_result_2.content_size != 0)) {
+        Bitmap_Header *header_1 = (Bitmap_Header *)read_result_1.content;
+        Bitmap_Header *header_2 = (Bitmap_Header *)read_result_2.content;
+        U32 *pixels_1 = (U32 *)((U8 *)read_result_1.content + header_1->bitmap_offset);
+        U32 *pixels_2 = (U32 *)((U8 *)read_result_2.content + header_2->bitmap_offset);
+        result_1 = pixels_1;
+        result_2 = pixels_2;
+    }
+
+    return result_1;
+}
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
+    Game_State *game_state = (Game_State *)memory->persisting_storage;
     if (!memory->is_initialised) {
+#if 0
         char *filename = __FILE__;
         Debug_Read_File_Result file = memory->DEBUGPlatformReadEntireFile(filename);
         if (file.content) {
             memory->DEBUGPlatformWriteEntireFile("test.out", file.content_size, file.content);
             memory->DEBUGPlatformFreeFileMemory(file.content);
         }
+#endif
+        char *bmp_1 = "art.bmp";
+        char *bmp_2 = "test_background.bmp";
+        char *bmp_3 = "gimp.bmp";
+        game_state->pixel_ptr = TestLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_1, bmp_2);
+        //game_state->pixel_ptr = DEBUGLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
 
         memory->is_initialised = true;
     }
     //RenderGradient(bitmap, x_offset, y_offset);
-    U32 purple = 0x00FF00FF;
-    U32 white  = 0xFFFFFFFF;
+    U32 purple = 0x00FF0000;
+    U32 white  = 0x00FFFFFF;
     V4  col0   = {0.03f, 0.52f, 0.63f, 1.0f};
+    //V4  col0   = {0.0f, 0.0f, 1.0f, 1.0f};
     V4  col1   = {0.46f, 0.12f, 0.62f, 1.0f};
     V4  col2   = {0.63f, 0.82f, 0.05f, 1.0f};
     V4  red    = {0.83f, 0.93f, 0.49f, 1.0f};
@@ -159,6 +224,27 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     DrawRectangle(bitmap, V2{0.0f, 0.0f}, V2{(R32)bitmap->width, (R32)bitmap->height}, purple);
     //DrawRectangle(bitmap, V2{20.0f, 20.0f}, V2{21.0f, 21.0f}, 0x0000FF00);
-    DrawTriangle(bitmap, V2{100, 600}, V2{300, 600}, V2{200, 200}, col0, col1, col2);
-    DrawTriangle(bitmap, V2{500, 450}, V2{200, 200}, V2{300, 600}, red, green, blue);
+    DrawTriangle(bitmap, V2{50, 300},  V2{150, 300}, V2{100, 100}, col0, col1, col2);
+    DrawTriangle(bitmap, V2{250, 225}, V2{100, 100}, V2{150, 300}, red, green, blue);
+    DrawTriangle(bitmap, V2{450, 425}, V2{400, 400}, V2{350, 500}, red, green, blue);
+
+#if 0
+    S32 pixel_width = 60;
+    S32 pixel_height = 40;
+
+    S32 blit_width = pixel_width;
+    S32 blit_height = pixel_height;
+    if (blit_width > bitmap->width) blit_width = bitmap->width;
+    if (blit_height > bitmap->height) blit_height = bitmap->height;
+
+    U32 *src = game_state->pixel_ptr;
+    U8 *dest_row = (U8 *)bitmap->memory;
+    for (S32 y = 0; y < pixel_height; y++) {
+        U32 *dest = (U32 *)dest_row;
+        for (S32 x = 0; x < pixel_width; x++) {
+            *dest++ = *src++;
+        }
+        dest_row += bitmap->pitch;
+    }
+#endif
 }
