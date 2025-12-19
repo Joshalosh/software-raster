@@ -66,8 +66,16 @@ int  pitch;
 int  bytes_per_pixel;
 };
 
+struct Loaded_Bitmap {
+    S32 width;
+    S32 height;
+    S32 pitch;
+    U32 pixels[16024];
+};
+
 struct Game_State {
     U32 *pixel_ptr;
+    Loaded_Bitmap loaded_bitmap;
 };
 
 struct Game_Memory {

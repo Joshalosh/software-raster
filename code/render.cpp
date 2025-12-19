@@ -182,23 +182,38 @@ INTERNAL U32 *DEBUGLoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char
     return result;
 }
 
-INTERNAL U32 *TestLoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *filename_1, char *filename_2) {
-    U32 *result_1 = 0;
-    U32 *result_2 = 0;
+INTERNAL Loaded_Bitmap LoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *filename) {
+    Loaded_Bitmap result = {};
 
-    Debug_Read_File_Result read_result_1 = ReadEntireFile(filename_1);
-    Debug_Read_File_Result read_result_2 = ReadEntireFile(filename_2);
-    if ((read_result_1.content_size != 0) && (read_result_2.content_size != 0)) {
-        Bitmap_Header *header_1 = (Bitmap_Header *)read_result_1.content;
-        Bitmap_Header *header_2 = (Bitmap_Header *)read_result_2.content;
-        U32 *pixels_1 = (U32 *)((U8 *)read_result_1.content + header_1->bitmap_offset);
-        U32 *pixels_2 = (U32 *)((U8 *)read_result_2.content + header_2->bitmap_offset);
-        result_1 = pixels_1;
-        result_2 = pixels_2;
+    Debug_Read_File_Result read_result = ReadEntireFile(filename);
+    if (read_result.content_size != 0) {
+        Bitmap_Header *header = (Bitmap_Header *)read_result.content;
+        U32 *pixels   = (U32 *)((U8 *)read_result.content + header->bitmap_offset);
+
+        result.width = header->width;
+        result.height = header->height < 0 ? -header->height : header->height;
+        result.pitch = result.width*4;
+        U32 loaded_bitmap_size = result.pitch*result.height;
+
+        if (header->height < 0) {
+            U8 *src_row = (U8 *)pixels + result.pitch * (result.height - 1);
+            U8 *dest_row = (U8 *)result.pixels;
+            for (S32 y = 0; y < result.height; y++) {
+                U32 *src  = (U32 *) src_row;
+                U32 *dest = (U32 *) dest_row;
+                for (S32 x = 0; x < result.width; x++) {
+                    *dest++ = *src++;
+                }
+                src_row -= result.pitch;
+                dest_row += result.pitch;
+            }
+        }
+        int x = 5;
     }
 
-    return result_1;
+    return result;
 }
+
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     Game_State *game_state = (Game_State *)memory->persisting_storage;
     if (!memory->is_initialised) {
@@ -213,8 +228,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         char *bmp_1 = "art.bmp";
         char *bmp_2 = "test_background.bmp";
         char *bmp_3 = "gimp.bmp";
-        //game_state->pixel_ptr = TestLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_1, bmp_2);
-        game_state->pixel_ptr = DEBUGLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
+        game_state->loaded_bitmap = LoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
+        //game_state->pixel_ptr = DEBUGLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
 
         memory->is_initialised = true;
     }
