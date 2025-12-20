@@ -1,5 +1,6 @@
 
 #include "render.h"
+#include "windows.h"
 
 INTERNAL void RenderGradient(Game_Bitmap bitmap, int x_offset, int y_offset) {
     U8 *row = (U8 *)bitmap.memory;
@@ -182,36 +183,47 @@ INTERNAL U32 *DEBUGLoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char
     return result;
 }
 
-INTERNAL Loaded_Bitmap LoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *filename) {
-    Loaded_Bitmap result = {};
+INTERNAL U32 *LoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *filename) {
+    void *memory = 0;
+    U32 *new_pixels = 0;
 
     Debug_Read_File_Result read_result = ReadEntireFile(filename);
     if (read_result.content_size != 0) {
         Bitmap_Header *header = (Bitmap_Header *)read_result.content;
         U32 *pixels   = (U32 *)((U8 *)read_result.content + header->bitmap_offset);
 
-        result.width = header->width;
-        result.height = header->height < 0 ? -header->height : header->height;
-        result.pitch = result.width*4;
-        U32 loaded_bitmap_size = result.pitch*result.height;
+        U32 bytes_per_pixel = 4;
+        U32 pitch = header->width*bytes_per_pixel;
+        U32 absolute_height = (header->height < 0) ? -header->height : header->height;
+        U32 buffer_size = pitch*absolute_height;
+        memory = VirtualAlloc(0, buffer_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+        new_pixels = (U32 *)memory;
 
-        if (header->height < 0) {
-            U8 *src_row = (U8 *)pixels + result.pitch * (result.height - 1);
-            U8 *dest_row = (U8 *)result.pixels;
-            for (S32 y = 0; y < result.height; y++) {
+        if (new_pixels) {
+            S32 sign;
+            U8 *src_row;
+            if (header->height > 0) {
+                src_row = (U8 *)pixels + pitch * (header->height - 1);
+                sign = -1;
+            } else {
+                src_row = (U8 *)pixels;
+                sign = 1;
+            }
+
+            U8 *dest_row = (U8 *)new_pixels;
+            for (S32 y = 0; y < (S32)absolute_height; y++) {
                 U32 *src  = (U32 *) src_row;
                 U32 *dest = (U32 *) dest_row;
-                for (S32 x = 0; x < result.width; x++) {
+                for (S32 x = 0; x < header->width; x++) {
                     *dest++ = *src++;
                 }
-                src_row -= result.pitch;
-                dest_row += result.pitch;
+                src_row  += pitch*sign;
+                dest_row += pitch;
             }
         }
-        int x = 5;
     }
 
-    return result;
+    return new_pixels;
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
@@ -228,7 +240,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         char *bmp_1 = "art.bmp";
         char *bmp_2 = "test_background.bmp";
         char *bmp_3 = "gimp.bmp";
-        game_state->loaded_bitmap = LoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
+        game_state->pixel_ptr = LoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
         //game_state->pixel_ptr = DEBUGLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
 
         memory->is_initialised = true;
@@ -260,7 +272,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     if (blit_height > bitmap->height) blit_height = bitmap->height;
 
     U32 src_pitch = pixel_width*4;
-    U8 *src_row = (U8 *)game_state->pixel_ptr + pixel_width * (pixel_height-1)*4;
+    U8 *src_row = (U8 *)game_state->pixel_ptr;
     U8 *dest_row = (U8 *)bitmap->memory;
     for (S32 y = 0; y < blit_height; y++) {
         U32 *dest = (U32 *)dest_row;
@@ -269,7 +281,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
             *dest++ = *src++;
         }
         dest_row += bitmap->pitch;
-        src_row -= src_pitch;
+        src_row += src_pitch;
     }
 #endif
 }

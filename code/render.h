@@ -70,7 +70,7 @@ struct Loaded_Bitmap {
     S32 width;
     S32 height;
     S32 pitch;
-    U32 pixels[16024];
+    void *pixels;
 };
 
 struct Game_State {
