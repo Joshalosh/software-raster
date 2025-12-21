@@ -200,14 +200,14 @@ INTERNAL U32 *LoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *fil
         new_pixels = (U32 *)memory;
 
         if (new_pixels) {
-            S32 sign;
+            S32 src_stride;
             U8 *src_row;
             if (header->height > 0) {
                 src_row = (U8 *)pixels + pitch * (header->height - 1);
-                sign = -1;
+                src_stride = -(S32)pitch;
             } else {
                 src_row = (U8 *)pixels;
-                sign = 1;
+                src_stride = (S32)pitch;
             }
 
             U8 *dest_row = (U8 *)new_pixels;
@@ -217,7 +217,7 @@ INTERNAL U32 *LoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *fil
                 for (S32 x = 0; x < header->width; x++) {
                     *dest++ = *src++;
                 }
-                src_row  += pitch*sign;
+                src_row  += src_stride;
                 dest_row += pitch;
             }
         }
