@@ -183,47 +183,59 @@ INTERNAL U32 *DEBUGLoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char
     return result;
 }
 
-INTERNAL U32 *LoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *filename) {
-    void *memory = 0;
-    U32 *new_pixels = 0;
+INTERNAL Game_Bitmap LoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *filename) {
+    Game_Bitmap bitmap = {};
 
     Debug_Read_File_Result read_result = ReadEntireFile(filename);
     if (read_result.content_size != 0) {
         Bitmap_Header *header = (Bitmap_Header *)read_result.content;
         U32 *pixels   = (U32 *)((U8 *)read_result.content + header->bitmap_offset);
 
-        U32 bytes_per_pixel = 4;
-        U32 pitch = header->width*bytes_per_pixel;
-        U32 absolute_height = (header->height < 0) ? -header->height : header->height;
-        U32 buffer_size = pitch*absolute_height;
-        memory = VirtualAlloc(0, buffer_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-        new_pixels = (U32 *)memory;
+        bitmap.bytes_per_pixel = 4;
+        bitmap.width = header->width;
+        bitmap.height = header->height;
+        bitmap.pitch = bitmap.width*bitmap.bytes_per_pixel;
+        U32 absolute_height = (bitmap.height < 0) ? -bitmap.height : bitmap.height;
+        U32 buffer_size = bitmap.pitch*absolute_height;
+        bitmap.memory = VirtualAlloc(0, buffer_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+        U32 *new_pixels = (U32 *)bitmap.memory;
 
         if (new_pixels) {
             S32 src_stride;
             U8 *src_row;
-            if (header->height > 0) {
-                src_row = (U8 *)pixels + pitch * (header->height - 1);
-                src_stride = -(S32)pitch;
+            if (bitmap.height > 0) {
+                src_row = (U8 *)pixels + bitmap.pitch * (bitmap.height - 1);
+                src_stride = -(S32)bitmap.pitch;
             } else {
                 src_row = (U8 *)pixels;
-                src_stride = (S32)pitch;
+                src_stride = (S32)bitmap.pitch;
             }
 
             U8 *dest_row = (U8 *)new_pixels;
             for (S32 y = 0; y < (S32)absolute_height; y++) {
                 U32 *src  = (U32 *) src_row;
                 U32 *dest = (U32 *) dest_row;
-                for (S32 x = 0; x < header->width; x++) {
-                    *dest++ = *src++;
+                for (S32 x = 0; x < bitmap.width; x++) {
+                    U32 alpha_mask = 0XFF000000;
+                    if (alpha_mask != header->alpha_mask) {
+#if 1
+                        U32 swivel = ((*src << 24) | (*src >> 8)); 
+                        *dest++ = swivel;
+                        src++;
+#else
+                        *dest++ = *src++;
+#endif
+                    } else {
+                        *dest++ = *src++;
+                    }
                 }
                 src_row  += src_stride;
-                dest_row += pitch;
+                dest_row += bitmap.pitch;
             }
         }
     }
 
-    return new_pixels;
+    return bitmap;
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
@@ -240,7 +252,9 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         char *bmp_1 = "art.bmp";
         char *bmp_2 = "test_background.bmp";
         char *bmp_3 = "gimp.bmp";
-        game_state->pixel_ptr = LoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
+
+        game_state->bitmap = LoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_2);
+        game_state->pixel_ptr = (U32 *)game_state->bitmap.memory;
         //game_state->pixel_ptr = DEBUGLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
 
         memory->is_initialised = true;
@@ -263,8 +277,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     DrawTriangle(bitmap, V2{450, 425}, V2{400, 400}, V2{350, 500}, red, green, blue);
 
 #if 1
-    S32 pixel_width = 60;
-    S32 pixel_height = 40;
+    S32 pixel_width = game_state->bitmap.width;
+    S32 pixel_height = ABS(game_state->bitmap.height);
 
     S32 blit_width = pixel_width;
     S32 blit_height = pixel_height;

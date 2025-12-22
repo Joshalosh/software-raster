@@ -28,6 +28,7 @@ typedef double   R64;
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define ABS(a) ((a) < (0) ? -(a) : (a))
 
 #if GAME_SLOW
 #define ASSERT(expression) if(!(expression)) {*(int *)0 = 0;}
@@ -75,7 +76,7 @@ struct Loaded_Bitmap {
 
 struct Game_State {
     U32 *pixel_ptr;
-    Loaded_Bitmap loaded_bitmap;
+    Game_Bitmap bitmap;
 };
 
 struct Game_Memory {
