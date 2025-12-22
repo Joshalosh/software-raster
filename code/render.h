@@ -60,23 +60,24 @@ typedef DEBUG_PLATFORM_WRITE_ENTIRE_FILE(Debug_Platform_Write_Entire_File);
 // Services that the game provides to the platform layer
 
 struct Game_Bitmap {
-void *memory;
-int  width;
-int  height;
-int  pitch;
-int  bytes_per_pixel;
+    void *memory;
+    int  width;
+    int  height;
+    int  pitch;
+    int  bytes_per_pixel;
 };
 
 struct Loaded_Bitmap {
     S32 width;
     S32 height;
     S32 pitch;
-    void *pixels;
+    S32 bytes_per_pixel;
+    U32 *pixels;
 };
 
 struct Game_State {
     U32 *pixel_ptr;
-    Game_Bitmap bitmap;
+    Loaded_Bitmap bitmap;
 };
 
 struct Game_Memory {

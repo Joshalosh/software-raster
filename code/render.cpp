@@ -183,49 +183,51 @@ INTERNAL U32 *DEBUGLoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char
     return result;
 }
 
-INTERNAL Game_Bitmap LoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *filename) {
-    Game_Bitmap bitmap = {};
+INTERNAL Loaded_Bitmap LoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, char *filename) {
+    Loaded_Bitmap bitmap = {};
 
     Debug_Read_File_Result read_result = ReadEntireFile(filename);
     if (read_result.content_size != 0) {
         Bitmap_Header *header = (Bitmap_Header *)read_result.content;
-        U32 *pixels   = (U32 *)((U8 *)read_result.content + header->bitmap_offset);
+        bitmap.pixels = (U32 *)((U8 *)read_result.content + header->bitmap_offset);
 
         bitmap.bytes_per_pixel = 4;
         bitmap.width = header->width;
-        bitmap.height = header->height;
+        bitmap.height = ABS(header->height);
         bitmap.pitch = bitmap.width*bitmap.bytes_per_pixel;
-        U32 absolute_height = (bitmap.height < 0) ? -bitmap.height : bitmap.height;
-        U32 buffer_size = bitmap.pitch*absolute_height;
-        bitmap.memory = VirtualAlloc(0, buffer_size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-        U32 *new_pixels = (U32 *)bitmap.memory;
+        U32 buffer_size = bitmap.pitch*bitmap.height;
+        //U32 *new_pixels = (U32 *)bitmap.memory;
 
-        if (new_pixels) {
+        if (bitmap.pixels) {
             S32 src_stride;
             U8 *src_row;
-            if (bitmap.height > 0) {
-                src_row = (U8 *)pixels + bitmap.pitch * (bitmap.height - 1);
+            if (header->height > 0) {
+                src_row = (U8 *)bitmap.pixels + bitmap.pitch * (bitmap.height - 1);
                 src_stride = -(S32)bitmap.pitch;
             } else {
-                src_row = (U8 *)pixels;
+                src_row = (U8 *)bitmap.pixels;
                 src_stride = (S32)bitmap.pitch;
             }
 
-            U8 *dest_row = (U8 *)new_pixels;
-            for (S32 y = 0; y < (S32)absolute_height; y++) {
+            U32 alpha_mask = 0XFF000000;
+            B32 memory_shift_needed = false;
+            if (header->compression == 3) {
+                if (alpha_mask != header->alpha_mask) {
+                    memory_shift_needed = true;
+                }
+            }
+
+            U8 *dest_row = (U8 *)bitmap.pixels;
+            for (S32 y = 0; y < bitmap.height; y++) {
                 U32 *src  = (U32 *) src_row;
                 U32 *dest = (U32 *) dest_row;
-                for (S32 x = 0; x < bitmap.width; x++) {
-                    U32 alpha_mask = 0XFF000000;
-                    if (alpha_mask != header->alpha_mask) {
-#if 1
-                        U32 swivel = ((*src << 24) | (*src >> 8)); 
-                        *dest++ = swivel;
-                        src++;
-#else
-                        *dest++ = *src++;
-#endif
-                    } else {
+                if (memory_shift_needed) {
+                    for (S32 x = 0; x < bitmap.width; x++) {
+                            *src = ((*src << 24) | (*src >> 8)); 
+                            *dest++ = *src++;
+                    }
+                } else {
+                    for (S32 x = 0; x < bitmap.width; x++) {
                         *dest++ = *src++;
                     }
                 }
@@ -234,7 +236,6 @@ INTERNAL Game_Bitmap LoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, ch
             }
         }
     }
-
     return bitmap;
 }
 
@@ -253,8 +254,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         char *bmp_2 = "test_background.bmp";
         char *bmp_3 = "gimp.bmp";
 
-        game_state->bitmap = LoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_2);
-        game_state->pixel_ptr = (U32 *)game_state->bitmap.memory;
+        game_state->bitmap = LoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
+        game_state->pixel_ptr = game_state->bitmap.pixels;
         //game_state->pixel_ptr = DEBUGLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
 
         memory->is_initialised = true;
@@ -277,8 +278,8 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     DrawTriangle(bitmap, V2{450, 425}, V2{400, 400}, V2{350, 500}, red, green, blue);
 
 #if 1
-    S32 pixel_width = game_state->bitmap.width;
-    S32 pixel_height = ABS(game_state->bitmap.height);
+    S32 pixel_width  = game_state->bitmap.width;
+    S32 pixel_height = game_state->bitmap.height;
 
     S32 blit_width = pixel_width;
     S32 blit_height = pixel_height;
