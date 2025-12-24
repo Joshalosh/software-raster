@@ -199,44 +199,151 @@ INTERNAL Loaded_Bitmap LoadBMP(Debug_Platform_Read_Entire_File *ReadEntireFile, 
         //U32 *new_pixels = (U32 *)bitmap.memory;
 
         if (bitmap.pixels) {
-            S32 src_stride;
-            U8 *src_row;
             if (header->height > 0) {
-                src_row = (U8 *)bitmap.pixels + bitmap.pitch * (bitmap.height - 1);
-                src_stride = -(S32)bitmap.pitch;
-            } else {
-                src_row = (U8 *)bitmap.pixels;
-                src_stride = (S32)bitmap.pitch;
-            }
+                U8 *src_row_bot = (U8 *)bitmap.pixels + bitmap.pitch * (bitmap.height - 1);
+                U8 *src_row_top = (U8 *)bitmap.pixels;
+                S32 src_stride = -(S32)bitmap.pitch;
 
-            U32 alpha_mask = 0XFF000000;
-            B32 memory_shift_needed = false;
-            if (header->compression == 3) {
-                if (alpha_mask != header->alpha_mask) {
-                    memory_shift_needed = true;
-                }
-            }
-
-            U8 *dest_row = (U8 *)bitmap.pixels;
-            for (S32 y = 0; y < bitmap.height; y++) {
-                U32 *src  = (U32 *) src_row;
-                U32 *dest = (U32 *) dest_row;
-                if (memory_shift_needed) {
-                    for (S32 x = 0; x < bitmap.width; x++) {
-                            *src = ((*src << 24) | (*src >> 8)); 
-                            *dest++ = *src++;
-                    }
-                } else {
-                    for (S32 x = 0; x < bitmap.width; x++) {
-                        *dest++ = *src++;
+                U32 alpha_mask = 0XFF000000;
+                B32 memory_shift_needed = false;
+                if (header->compression == 3) {
+                    if (alpha_mask != header->alpha_mask) {
+                        memory_shift_needed = true;
                     }
                 }
-                src_row  += src_stride;
-                dest_row += bitmap.pitch;
+
+                U8 *dest_row = src_row_top;
+                for (S32 y = 0; y < (bitmap.height / 2); y++) {
+                    U32 *pixel_bot  = (U32 *) src_row_top;
+                    U32 *pixel_top  = (U32 *) src_row_bot;
+                    if (memory_shift_needed) {
+                        for (S32 x = 0; x < bitmap.width; x++) {
+                            U32 swivel_top = ((*pixel_top << 24) | (*pixel_top >> 8)); 
+                            U32 swivel_bot = ((*pixel_bot << 24) | (*pixel_bot >> 8)); 
+                            *pixel_top++ = swivel_bot;
+                            *pixel_bot++ = swivel_top;
+                        }
+                    } else {
+                        for (S32 x = 0; x < bitmap.width; x++) {
+                            U32 val_top = *pixel_top; 
+                            U32 val_bot = *pixel_bot; 
+                            *pixel_bot++ = val_top;
+                            *pixel_top++ = val_bot;
+                        }
+                    }
+                    src_row_top += bitmap.pitch;
+                    src_row_bot += src_stride;
+                }
+
+                if (bitmap.height % 2 != 0) {
+                    U32 *mid_row = (U32 *)src_row_bot;
+                    if (memory_shift_needed) {
+                        for (S32 x = 0; x < bitmap.width; x++) {
+                            *mid_row = ((*mid_row << 24) | (*mid_row >> 8));
+                            mid_row++;
+                        }
+                    }
+                }
             }
         }
     }
     return bitmap;
+}
+
+INTERNAL void DrawTexturedTriangle(Game_Bitmap *bitmap, Loaded_Bitmap *texture, V2 vert0, V2 vert1, V2 vert2, 
+                                   V2 uv0, V2 uv1, V2 uv2) {
+    S32 min_x = RoundR32ToS32(MIN(MIN(vert0.x, vert1.x), vert2.x));
+    S32 min_y = RoundR32ToS32(MIN(MIN(vert0.y, vert1.y), vert2.y));
+    S32 max_x = RoundR32ToS32(MAX(MAX(vert0.x, vert1.x), vert2.x));
+    S32 max_y = RoundR32ToS32(MAX(MAX(vert0.y, vert1.y), vert2.y));
+
+    if (min_x < 0) min_x = 0;
+    if (min_y < 0) min_y = 0;
+    if (max_x > bitmap->width)  max_x = bitmap->width;
+    if (max_y > bitmap->height) max_y = bitmap->height;
+
+    V2 edge0 = vert2 - vert1;
+    V2 edge1 = vert0 - vert2;
+    V2 edge2 = vert1 - vert0;
+
+    V2 norm0 = {-edge0.y, edge0.x};
+    V2 norm1 = {-edge1.y, edge1.x};
+    V2 norm2 = {-edge2.y, edge2.x};
+
+    S32 w0_dx = (S32)norm0.x;
+    S32 w1_dx = (S32)norm1.x;
+    S32 w2_dx = (S32)norm2.x;
+
+    S32 w0_dy = (S32)norm0.y;
+    S32 w1_dy = (S32)norm1.y;
+    S32 w2_dy = (S32)norm2.y;
+
+    R32 triangle_area = (R32)SignedArea(vert0, vert1, vert2);
+    R32 inverse_triangle_area = 1.0f / triangle_area;
+
+    S32 bias0 = IsLeftOrTopEdge(vert1, vert2) ? 0 : 1;
+    S32 bias1 = IsLeftOrTopEdge(vert2, vert0) ? 0 : 1;
+    S32 bias2 = IsLeftOrTopEdge(vert0, vert1) ? 0 : 1;
+
+    V2 pixel_coord = {(R32)min_x, (R32)min_y};
+    S32 w0_row_start = SignedArea(vert1, vert2, pixel_coord) + bias0;
+    S32 w1_row_start = SignedArea(vert2, vert0, pixel_coord) + bias1;
+    S32 w2_row_start = SignedArea(vert0, vert1, pixel_coord) + bias2;
+
+    U8 *row_start = (U8 *)bitmap->memory + (min_x*bitmap->bytes_per_pixel) + (min_y*bitmap->pitch);
+    for (S32 y = min_y; y < max_y; y++) {
+        S32 w0 = w0_row_start;
+        S32 w1 = w1_row_start;
+        S32 w2 = w2_row_start;
+        U32 *pixel = (U32 *)row_start;
+        for (S32 x = min_x; x < max_x; x++) {
+            if (w0 <= 0 && w1 <= 0 && w2 <= 0) {
+                R32 ratio0 = w0 * inverse_triangle_area;
+                R32 ratio1 = w1 * inverse_triangle_area;
+                R32 ratio2 = w2 * inverse_triangle_area;
+
+                R32 tex_u = (ratio0*uv0.x) + (ratio1*uv1.x) + (ratio2*uv2.x);
+                R32 tex_v = (ratio0*uv0.y) + (ratio1*uv1.y) + (ratio2*uv2.y);
+
+                if (tex_u < 0) tex_u = 0; 
+                if (tex_u > 1) tex_u = 1;
+                if (tex_v < 0) tex_v = 0; 
+                if (tex_v > 1) tex_v = 1;
+
+                S32 tex_x = (S32)((tex_u * (texture->width  - 1)) + 0.5f);
+                S32 tex_y = (S32)((tex_v * (texture->height - 1)) + 0.5f);
+
+                U8 *src_row = (U8 *)texture->pixels + (tex_y *texture->pitch);
+                U32 *src_ptr = (U32 *)src_row + tex_x;
+                U32 texel = *src_ptr;
+
+                R32 t_a = (R32)((texel >> 24) & 0xFF) / 255.0f;
+                R32 t_r = (R32)((texel >> 16) & 0xFF) / 255.0f;
+                R32 t_g = (R32)((texel >>  8) & 0xFF) / 255.0f;
+                R32 t_b = (R32)((texel >>  0) & 0xFF) / 255.0f;
+
+                R32 r = t_r;
+                R32 g = t_g;
+                R32 b = t_b;
+                R32 a = t_a;
+
+                U8 red   = (U8)((r*255.0f) + 0.5f);
+                U8 green = (U8)((g*255.0f) + 0.5f);
+                U8 blue  = (U8)((b*255.0f) + 0.5f);
+                U8 alpha = (U8)((a*255.0f) + 0.5f);
+
+                *pixel = ((alpha << 24) | (red << 16) | (green << 8) | blue);
+            }
+            w0 += w0_dx;
+            w1 += w1_dx;
+            w2 += w2_dx;
+            pixel++;
+        }
+        w0_row_start += w0_dy;
+        w1_row_start += w1_dy;
+        w2_row_start += w2_dy;
+        row_start += bitmap->pitch;
+    }
 }
 
 extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
@@ -254,7 +361,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         char *bmp_2 = "test_background.bmp";
         char *bmp_3 = "gimp.bmp";
 
-        game_state->bitmap = LoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
+        game_state->bitmap = LoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_2);
         game_state->pixel_ptr = game_state->bitmap.pixels;
         //game_state->pixel_ptr = DEBUGLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
 
@@ -273,11 +380,13 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
 
     DrawRectangle(bitmap, V2{0.0f, 0.0f}, V2{(R32)bitmap->width, (R32)bitmap->height}, purple);
     //DrawRectangle(bitmap, V2{20.0f, 20.0f}, V2{21.0f, 21.0f}, 0x0000FF00);
-    DrawTriangle(bitmap, V2{50, 300},  V2{150, 300}, V2{100, 100}, col0, col1, col2);
+    //DrawTriangle(bitmap, V2{50, 300},  V2{150, 300}, V2{100, 100}, col0, col1, col2);
+    DrawTexturedTriangle(bitmap, &game_state->bitmap, V2{50, 300},  V2{150, 300}, V2{100, 100}, 
+                         V2{0.0f, 0.0f}, V2{1.0f, 0.0f}, V2{0.0f, 1.0f});
     DrawTriangle(bitmap, V2{250, 225}, V2{100, 100}, V2{150, 300}, red, green, blue);
     DrawTriangle(bitmap, V2{450, 425}, V2{400, 400}, V2{350, 500}, red, green, blue);
 
-#if 1
+#if 0
     S32 pixel_width  = game_state->bitmap.width;
     S32 pixel_height = game_state->bitmap.height;
 
