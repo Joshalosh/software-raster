@@ -360,8 +360,11 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
         char *bmp_1 = "art.bmp";
         char *bmp_2 = "test_background.bmp";
         char *bmp_3 = "gimp.bmp";
+        char *bmp_4 = "test_hero_back_cape.bmp";
+        char *bmp_5 = "test_hero_front_head.bmp";
+        char *bmp_6 = "test_scene_layer_03.bmp";
 
-        game_state->bitmap = LoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_2);
+        game_state->bitmap = LoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_6);
         game_state->pixel_ptr = game_state->bitmap.pixels;
         //game_state->pixel_ptr = DEBUGLoadBMP(memory->DEBUGPlatformReadEntireFile, bmp_3);
 
@@ -382,7 +385,7 @@ extern "C" GAME_UPDATE_AND_RENDER(GameUpdateAndRender) {
     //DrawRectangle(bitmap, V2{20.0f, 20.0f}, V2{21.0f, 21.0f}, 0x0000FF00);
     //DrawTriangle(bitmap, V2{50, 300},  V2{150, 300}, V2{100, 100}, col0, col1, col2);
     DrawTexturedTriangle(bitmap, &game_state->bitmap, V2{50, 300},  V2{150, 300}, V2{100, 100}, 
-                         V2{0.0f, 0.0f}, V2{1.0f, 0.0f}, V2{0.0f, 1.0f});
+                         V2{0.0f, 1.0f}, V2{1.0f, 1.0f}, V2{0.5f, 0.0f});
     DrawTriangle(bitmap, V2{250, 225}, V2{100, 100}, V2{150, 300}, red, green, blue);
     DrawTriangle(bitmap, V2{450, 425}, V2{400, 400}, V2{350, 500}, red, green, blue);
 
